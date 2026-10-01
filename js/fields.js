@@ -80,7 +80,8 @@ export const FIELDS = [
   { id: 'intimacy', card: 'rel', area: 'rel', label: 'Intimacy', type: 'choice', scale: true,
     options: [o(1, '1', 0), o(2, '2', 5), o(3, '3', 10), o(4, '4', 15), o(5, '5', 20)] },
   { id: 'release', card: 'rel', area: 'rel', label: 'Release?', type: 'choice', options: yesno(0, 5) },
-  { id: 'cage', card: 'rel', area: 'rel', label: 'Cage', type: 'choice', options: yesno(0, 0) },
+  // Tracked as a factor for insights; never scored.
+  { id: 'cage', card: 'rel', area: null, label: 'Cage', type: 'choice', options: yesno(0, 0) },
   { id: 'currentDays', card: 'rel', area: 'rel', label: 'Current days', type: 'auto',
     bands: [[8, 0], [15, 5], [22, 10], [29, 15], [Infinity, 20]] },
   { id: 'service', card: 'rel', area: 'rel', label: 'Service', type: 'choice',
