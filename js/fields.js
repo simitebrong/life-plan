@@ -52,6 +52,9 @@ export const FIELDS = [
     options: [o('none', 'None', 5), o('some', 'Some', 0), o('lots', 'Lots', -5)] },
 
   // Movement
+  { id: 'homeWorkout', card: 'move', area: 'move', label: 'Home workout', type: 'workout',
+    // points by how much of the day's target you reached
+    bands: [[1, 0], [50, 5], [75, 10], [100, 15], [Infinity, 20]] },
   { id: 'schoolRuns', card: 'move', area: 'move', label: 'School runs', type: 'choice', scale: true,
     options: [o(0, '0', 0), o(1, '1', 5), o(2, '2', 10), o(3, '3', 15), o(4, '4', 20)] },
   { id: 'morningWorkout', card: 'move', area: 'move', label: 'Morning workout', type: 'multi',
@@ -144,7 +147,71 @@ export const DEFAULT_SETTINGS = {
   reminders: { enabled: true, morning: '07:45', evening: '21:30', weeklyReview: { weekday: 0, at: '20:45' } },
   currentDaysStart: null,
   birthday: '1985-10-04',
+  workoutPlan: { start: '2026-10-05', base: 400 },
 };
+
+// ---------- Home workout ----------
+// Points per rep (plank: per second; cardio: 1 per minute + 20 per km)
+export const EXERCISES = [
+  { id: 'shoulderPress', name: 'Shoulder presses', pts: 1, area: 'upper' },
+  { id: 'sideRaises', name: 'Side arm raises', pts: 2, area: 'upper' },
+  { id: 'bicepCurls', name: 'Bicep curls', pts: 1, area: 'upper' },
+  { id: 'rhomboidPulls', name: 'Rhomboid pulls', pts: 1, area: 'upper' },
+  { id: 'tricepDips', name: 'Tricep dips', pts: 3, area: 'upper' },
+  { id: 'inclinePushUps', name: 'Incline push ups', pts: 2, area: 'upper' },
+  { id: 'crunches', name: 'Crunches', pts: 2, area: 'core' },
+  { id: 'heelTouches', name: 'Heel touches', pts: 1, area: 'core' },
+  { id: 'legLifts', name: 'Leg lifts', pts: 3, area: 'core' },
+  { id: 'hipLifts', name: 'Hip lifts', pts: 2, area: 'core' },
+  { id: 'russianTwists', name: 'Russian twists', pts: 2, area: 'core' },
+  { id: 'mountainClimbers', name: 'Mountain climbers', pts: 3, area: 'core' },
+  { id: 'plank', name: 'Plank', pts: 5, area: 'core', unit: 'sec' },
+  { id: 'squats', name: 'Squats', pts: 2, area: 'lower' },
+  { id: 'backwardLunges', name: 'Backward lunges', pts: 3, area: 'lower' },
+  { id: 'hydrants', name: 'Hydrants', pts: 2, area: 'lower' },
+  { id: 'donkeyKicks', name: 'Donkey kicks', pts: 1, area: 'lower' },
+  { id: 'lyingLegRaises', name: 'Lying leg raises', pts: 2, area: 'lower' },
+  { id: 'calfRaises', name: 'Calf raises', pts: 1, area: 'lower' },
+  { id: 'sumoCalfRaises', name: 'Sumo squat calf raises', pts: 2, area: 'lower' },
+];
+export const EX = Object.fromEntries(EXERCISES.map((e) => [e.id, e]));
+export const EX_GROUPS = [['upper', 'Upper body'], ['core', 'Core'], ['lower', 'Lower body']];
+export const ALL_BOX_BONUS = 150;
+export const CARDIO_PTS = { perMin: 1, perKm: 20 };
+
+// workout = { morning: {exId: reps}, midday: {exId: reps}, cardio: { mins, km } }
+export function exerciseTotals(w) {
+  const t = {};
+  for (const s of ['morning', 'midday']) for (const [k, v] of Object.entries(w?.[s] || {})) t[k] = (t[k] || 0) + (Number(v) || 0);
+  return t;
+}
+export function workoutBreakdown(w) {
+  const totals = exerciseTotals(w);
+  const reps = EXERCISES.reduce((s, e) => s + (totals[e.id] || 0) * e.pts, 0);
+  const mins = Number(w?.cardio?.mins) || 0; const km = Number(w?.cardio?.km) || 0;
+  const cardio = Math.round(mins * CARDIO_PTS.perMin + km * CARDIO_PTS.perKm);
+  const boxes = EXERCISES.filter((e) => totals[e.id] > 0).length + (mins > 0 || km > 0 ? 1 : 0);
+  const boxTotal = EXERCISES.length + 1;
+  const bonus = boxes === boxTotal ? ALL_BOX_BONUS : 0;
+  return { reps, cardio, bonus, boxes, boxTotal, total: reps + cardio + bonus, totals };
+}
+export const workoutScore = (w) => workoutBreakdown(w).total;
+
+// 400 on the start date, +25 every 2 days for two weeks (to 550), then +25 a week.
+export function workoutTarget(day, plan = DEFAULT_SETTINGS.workoutPlan) {
+  const start = plan?.start || '2026-10-05';
+  const base = Number(plan?.base) || 400;
+  const n = Math.round((Date.parse(day + 'T12:00:00') - Date.parse(start + 'T12:00:00')) / 86400000);
+  if (n < 0) return base;
+  if (n < 14) return base + 25 * Math.floor(n / 2);
+  return base + 150 + 25 * (Math.floor((n - 14) / 7) + 1);
+}
+
+export function workoutAreasFor(w, session) {
+  const set = new Set();
+  for (const [k, v] of Object.entries(w?.[session] || {})) if (v > 0 && EX[k]) set.add(EX[k].area);
+  return ['lower', 'core', 'upper'].filter((a) => set.has(a));
+}
 
 export function targetFor(day, plan) {
   const steps = [...(plan || DEFAULT_DRINK_PLAN)].sort((a, b) => a.from.localeCompare(b.from));
@@ -182,6 +249,11 @@ export function fieldPoints(f, v, ctx) {
     case 'multi': return v.reduce((s, x) => s + (f.options.find((y) => y.v === x)?.pts ?? 0), 0);
     case 'time': return band(f.bands, timeToMins(v, f.evening));
     case 'auto': return band(f.bands, v);
+    case 'workout': {
+      const t = ctx.workoutTarget;
+      if (!t || !(v > 0)) return null;
+      return band(f.bands, (v / t) * 100);
+    }
     case 'count': {
       if (v === 0) return 30;
       const t = ctx.target;
@@ -205,7 +277,7 @@ export function scoreDay(data, ctx) {
     if (!f.area) continue;
     if (f.id === 'currentDays' && !answered(data.release)) continue;
     if (dry && f.hideWhenDry) continue;
-    const p = fieldPoints(f, data[f.id], ctx);
+    const p = fieldPoints(f, f.type === 'workout' ? data.workoutScore : data[f.id], ctx);
     if (p === null) continue;
     pts[f.area] = (pts[f.area] || 0) + p;
     counts[f.area] = (counts[f.area] || 0) + 1;
@@ -234,6 +306,7 @@ export function wellbeingReading(d) {
 
 export function isAnswered(f, data) {
   if (f.type === 'auto') return answered(data.release);
+  if (f.type === 'workout') return data.workoutScore > 0;
   return answered(data[f.id]);
 }
 

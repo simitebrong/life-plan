@@ -3,6 +3,7 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY, VAPID_PUBLIC_KEY, APP_VERSION } from '
 import {
   AREAS, AREA_ORDER, CARDS, FIELDS, FIELD, DEFAULT_SETTINGS, targetFor, scoreDay,
   computeCurrentDays, wellbeingReading, isAnswered, visibleFields, fieldPoints,
+  EXERCISES, EX_GROUPS, ALL_BOX_BONUS, workoutBreakdown, workoutTarget, workoutAreasFor,
 } from './fields.js';
 import { SEED_GOALS, CATEGORIES } from './goals-seed.js';
 
@@ -41,7 +42,11 @@ const S = {
   sheet: null,
 };
 
-const ctxFor = (day) => ({ target: targetFor(day, S.settings.drinkPlan), baselineSpend: Number(S.settings.baselineSpend) || 12 });
+const ctxFor = (day) => ({
+  target: targetFor(day, S.settings.drinkPlan),
+  baselineSpend: Number(S.settings.baselineSpend) || 12,
+  workoutTarget: workoutTarget(day, S.settings.workoutPlan),
+});
 const entry = (day = S.day) => (S.entries[day] ||= {});
 
 // ---------- persistence ----------
@@ -211,13 +216,23 @@ function control(f, d) {
     }
     case 'text':
       return `<textarea data-f="${f.id}" rows="4" placeholder="Anything worth remembering about today">${esc(v || '')}</textarea>`;
+    case 'workout': {
+      const t = ctxFor(S.day).workoutTarget;
+      const sc = d.workoutScore || 0;
+      const pct = Math.min(100, Math.round((sc / t) * 100));
+      return `<button type="button" class="workout-link" data-act="tab" data-v="workout">
+        <span class="wl-nums"><strong>${sc}</strong> / ${t}</span>
+        <span class="wl-bar"><span style="width:${pct}%"></span></span>
+        <span class="wl-cta">${sc ? (sc >= t ? 'Target reached. Add more' : 'Add exercises') : 'Log your exercises'}</span>
+      </button>`;
+    }
     default: return '';
   }
 }
 
 function fieldRow(f, d) {
   const done = isAnswered(f, d);
-  const p = f.area ? fieldPoints(f, f.type === 'auto' ? d.currentDays : d[f.id], ctxFor(S.day)) : null;
+  const p = f.area ? fieldPoints(f, f.type === 'auto' ? d.currentDays : f.type === 'workout' ? d.workoutScore : d[f.id], ctxFor(S.day)) : null;
   return `<div class="field${done ? ' done' : ''}" data-field="${f.id}">
     <div class="field-head"><span class="field-label">${esc(f.label)}</span>${p != null && p !== 0 && f.type !== 'auto' ? `<span class="pts ${p > 0 ? 'pos' : 'neg'}">${p > 0 ? '+' : ''}${p}</span>` : ''}</div>
     ${control(f, d)}
@@ -273,6 +288,160 @@ function yesterdayUnfinished() {
   return !d.done && n < 20;
 }
 
+// ---------- home workout ----------
+const defaultSession = () => (new Date().getHours() < 11 ? 'morning' : 'midday');
+
+function setWorkout(mutator, opts = {}) {
+  const d = entry();
+  const w = d.workout ? JSON.parse(JSON.stringify(d.workout)) : { morning: {}, midday: {}, cardio: {} };
+  mutator(w);
+  for (const s of ['morning', 'midday']) for (const k of Object.keys(w[s] || {})) if (!(w[s][k] > 0)) delete w[s][k];
+  if (w.cardio) { for (const k of ['mins', 'km']) if (!(w.cardio[k] > 0)) delete w.cardio[k]; }
+  d.workout = w;
+  const b = workoutBreakdown(w);
+  if (b.total > 0) d.workoutScore = b.total; else delete d.workoutScore;
+  d.workoutTarget = ctxFor(S.day).workoutTarget;
+  // Fill Morning/Midday workout fields from what was logged, keeping anything ticked by hand.
+  d._wDerived ||= {};
+  for (const [session, fid] of [['morning', 'morningWorkout'], ['midday', 'middayWorkout']]) {
+    const prev = d._wDerived[session] || [];
+    const now = workoutAreasFor(w, session);
+    const manual = (Array.isArray(d[fid]) ? d[fid] : []).filter((x) => !prev.includes(x) && x !== 'none');
+    const merged = ['lower', 'core', 'upper'].filter((a) => manual.includes(a) || now.includes(a));
+    if (merged.length) d[fid] = merged;
+    else if (prev.length) delete d[fid];
+    d._wDerived[session] = now;
+  }
+  queueSave(S.day);
+  if (opts.defer) { clearTimeout(deferTimer); deferTimer = setTimeout(render, 400); } else render();
+}
+
+function lastTime(exId) {
+  const days = Object.keys(S.entries).filter((k) => k < S.day && S.entries[k].workout).sort().reverse();
+  for (const k of days) {
+    const w = S.entries[k].workout;
+    const n = (w.morning?.[exId] || 0) + (w.midday?.[exId] || 0);
+    if (n > 0) return n;
+  }
+  return null;
+}
+
+function workoutMessage(sc, t, best, boxesLeft) {
+  if (!sc) return 'Every rep counts. Pick any exercise to start.';
+  if (best != null && sc > best) return `New personal best. ${sc} beats your previous ${best}.`;
+  if (sc >= t) return `Target reached with ${sc - t} to spare. Anything else is a bonus.`;
+  if (boxesLeft > 0 && boxesLeft <= 3) return `${boxesLeft} more exercise${boxesLeft > 1 ? 's' : ''} for the +${ALL_BOX_BONUS} bonus.`;
+  const pct = Math.round((sc / t) * 100);
+  return pct >= 50 ? `${pct}% of today's target. Building nicely.` : `${sc} points in the bank. Good start.`;
+}
+
+function viewWorkout() {
+  const d = entry();
+  const w = d.workout || { morning: {}, midday: {}, cardio: {} };
+  const session = S.wSession || defaultSession();
+  const b = workoutBreakdown(w);
+  const t = ctxFor(S.day).workoutTarget;
+  const pct = Math.min(100, Math.round((b.total / t) * 100));
+  const prevScores = Object.keys(S.entries).filter((k) => k !== S.day && S.entries[k].workoutScore > 0).map((k) => S.entries[k].workoutScore);
+  const best = prevScores.length ? Math.max(...prevScores) : null;
+  const isToday = S.day === todayIso();
+  const other = session === 'morning' ? 'midday' : 'morning';
+
+  // This week (Mon-Sun)
+  const dow = (new Date(S.day + 'T12:00:00').getDay() + 6) % 7;
+  const monday = addDays(S.day, -dow);
+  const week = Array.from({ length: 7 }, (_, i) => addDays(monday, i));
+  const weekTotal = week.reduce((s, k) => s + (S.entries[k]?.workoutScore || 0), 0);
+  const weekDays = week.filter((k) => S.entries[k]?.workoutScore > 0).length;
+  const strip = week.map((k) => {
+    const sc = S.entries[k]?.workoutScore || 0; const tt = workoutTarget(k, S.settings.workoutPlan);
+    const h = sc ? Math.max(8, Math.min(100, Math.round((sc / tt) * 100))) : 0;
+    return `<div class="wk-day${k === S.day ? ' cur' : ''}${sc >= tt ? ' hit' : ''}" title="${fmtShort(k)}: ${sc || 'rest'}">
+      <div class="wk-bar"><span style="height:${h}%"></span></div>
+      <span>${new Date(k + 'T12:00:00').toLocaleDateString('en-GB', { weekday: 'narrow' })}</span></div>`;
+  }).join('');
+
+  const row = (e) => {
+    const n = w[session]?.[e.id] || 0;
+    const otherN = w[other]?.[e.id] || 0;
+    const sec = e.unit === 'sec';
+    const step1 = sec ? 10 : 5; const step2 = sec ? 30 : 10;
+    const lt = lastTime(e.id);
+    const earned = (n + otherN) * e.pts;
+    return `<div class="ex${n + otherN > 0 ? ' done' : ''}">
+      <div class="ex-head">
+        <span class="ex-name">${esc(e.name)}</span>
+        <span class="ex-pts">${earned ? `<strong>+${earned}</strong>` : `${e.pts} pt${e.pts > 1 ? 's' : ''} per ${sec ? 'second' : 'rep'}`}</span>
+      </div>
+      <div class="ex-ctrl">
+        <button type="button" class="step sm" data-act="ex" data-id="${e.id}" data-n="-${step1}" aria-label="Less">−</button>
+        <label class="ex-val"><input type="number" inputmode="numeric" min="0" data-ex="${e.id}" value="${n || ''}" placeholder="0" aria-label="${esc(e.name)} ${sec ? 'seconds' : 'reps'}"><span>${sec ? 'sec' : 'reps'}</span></label>
+        <button type="button" class="opt slim" data-act="ex" data-id="${e.id}" data-n="${step1}">+${step1}</button>
+        <button type="button" class="opt slim" data-act="ex" data-id="${e.id}" data-n="${step2}">+${step2}</button>
+      </div>
+      ${otherN || lt ? `<p class="ex-note">${otherN ? `${otherN} ${sec ? 'sec' : ''} logged ${other === 'morning' ? 'this morning' : 'at midday'}. ` : ''}${lt ? `Last time: ${lt}${sec ? ' sec' : ''}.` : ''}</p>` : ''}
+    </div>`;
+  };
+
+  const mins = w.cardio?.mins || 0; const km = w.cardio?.km || 0;
+  return `<section class="page workout">
+    <div class="date-nav">
+      <button type="button" class="nav-arrow" data-act="day" data-n="-1" aria-label="Previous day">‹</button>
+      <label class="date-label"><span class="date-main">${isToday ? 'Home workout' : esc(fmtLong(S.day))}</span>
+        <span class="date-sub">${isToday ? esc(fmtLong(S.day)) : 'Home workout'}</span>
+        <input type="date" class="date-pick" value="${S.day}" max="${todayIso()}" aria-label="Choose a day"></label>
+      <button type="button" class="nav-arrow" data-act="day" data-n="1" ${isToday ? 'disabled' : ''} aria-label="Next day">›</button>
+    </div>
+
+    <div class="w-score">
+      <div class="w-big"><span class="w-num">${b.total}</span><span class="w-of">of ${t}</span></div>
+      <div class="w-bar${b.total >= t ? ' hit' : ''}"><span style="width:${pct}%"></span></div>
+      <p class="w-msg">${esc(workoutMessage(b.total, t, best, b.boxTotal - b.boxes))}</p>
+      <div class="w-facts">
+        <span><strong>${b.boxes}</strong>/${b.boxTotal} exercises ${b.bonus ? `· +${ALL_BOX_BONUS} bonus earned` : ''}</span>
+        ${best != null ? `<span>Best: <strong>${Math.max(best, b.total)}</strong></span>` : ''}
+      </div>
+    </div>
+
+    <div class="seg" role="group" aria-label="Session">
+      <button type="button" class="${session === 'morning' ? 'on' : ''}" data-act="wsession" data-v="morning">Morning</button>
+      <button type="button" class="${session === 'midday' ? 'on' : ''}" data-act="wsession" data-v="midday">Midday</button>
+    </div>
+
+    ${EX_GROUPS.map(([g, label]) => `<section class="card ex-group" style="--accent:var(--a-move)">
+      <header class="card-head"><h2>${label}</h2><span class="card-meta">${EXERCISES.filter((e) => e.area === g && b.totals[e.id] > 0).length}/${EXERCISES.filter((e) => e.area === g).length}</span></header>
+      ${EXERCISES.filter((e) => e.area === g).map(row).join('')}
+    </section>`).join('')}
+
+    <section class="card ex-group" style="--accent:var(--a-move)">
+      <header class="card-head"><h2>Cardio</h2><span class="card-meta">${b.cardio ? `+${b.cardio}` : '10 per 10 min · 20 per km'}</span></header>
+      <div class="ex${mins || km ? ' done' : ''}">
+        <div class="ex-head"><span class="ex-name">Minutes</span></div>
+        <div class="ex-ctrl">
+          <button type="button" class="step sm" data-act="cardio" data-k="mins" data-n="-5" aria-label="Less">−</button>
+          <label class="ex-val"><input type="number" inputmode="numeric" min="0" data-cardio="mins" value="${mins || ''}" placeholder="0"><span>min</span></label>
+          <button type="button" class="opt slim" data-act="cardio" data-k="mins" data-n="5">+5</button>
+          <button type="button" class="opt slim" data-act="cardio" data-k="mins" data-n="10">+10</button>
+        </div>
+      </div>
+      <div class="ex${km ? ' done' : ''}">
+        <div class="ex-head"><span class="ex-name">Distance</span></div>
+        <div class="ex-ctrl">
+          <button type="button" class="step sm" data-act="cardio" data-k="km" data-n="-0.5" aria-label="Less">−</button>
+          <label class="ex-val"><input type="number" inputmode="decimal" min="0" step="0.1" data-cardio="km" value="${km || ''}" placeholder="0"><span>km</span></label>
+          <button type="button" class="opt slim" data-act="cardio" data-k="km" data-n="0.5">+0.5</button>
+          <button type="button" class="opt slim" data-act="cardio" data-k="km" data-n="1">+1</button>
+        </div>
+      </div>
+    </section>
+
+    <h2 class="sub">This week</h2>
+    <div class="wk">${strip}</div>
+    <p class="micro">${weekTotal ? `<strong>${weekTotal}</strong> points across ${weekDays} day${weekDays > 1 ? 's' : ''} this week.` : 'Your week starts with the first rep.'}</p>
+    <p class="micro">Your score flows into Today under Movement and fills in your Morning and Midday workout automatically.</p>
+  </section>`;
+}
+
 // ---------- views ----------
 function viewToday() {
   const d = entry();
@@ -320,6 +489,10 @@ function finishMessage(d, sc) {
   const best = AREA_ORDER.filter((a) => sc.areas[a] != null).sort((a, b) => sc.areas[b] - sc.areas[a])[0];
   if (best && sc.areas[best] >= 60) lines.push(`Strongest area: ${AREAS[best].label} (${sc.areas[best]}).`);
   if (d.fcProject && d.fcProject !== 'none') lines.push('Another brick in the FC plan.');
+  if (d.workoutScore > 0) {
+    const wt = ctxFor(S.day).workoutTarget;
+    lines.push(d.workoutScore >= wt ? `Workout target reached: ${d.workoutScore} of ${wt}.` : `${d.workoutScore} workout points banked.`);
+  }
   const closers = ['Logged and done. That habit is the win.', 'One more day of showing up for yourself.',
     'Your 40s are built a day at a time. This was one.', 'Rest well. Tomorrow starts fresh.', 'Small days add up to a big decade.'];
   lines.push(closers[Math.floor(Math.random() * closers.length)]);
@@ -411,6 +584,15 @@ function viewSettings() {
       <button type="button" class="secondary small" data-act="plan-add">Add a step</button>
     </div>
 
+    <h2 class="sub">Home workout targets</h2>
+    <div class="set-block">
+      <p class="micro">Starts at your base target, rises 25 every 2 days for two weeks, then 25 a week. Today's target: <strong>${workoutTarget(todayIso(), st.workoutPlan)}</strong>.</p>
+      <div class="row2">
+        <label>Start date<input type="date" data-set="w-start" value="${esc(st.workoutPlan?.start || '2026-10-05')}"></label>
+        <label>Base target<input type="number" min="0" step="25" data-set="w-base" value="${esc(st.workoutPlan?.base ?? 400)}"></label>
+      </div>
+    </div>
+
     <h2 class="sub">Money</h2>
     <div class="set-block">
       <label class="inline">Typical daily alcohol spend before the plan <span class="money-in"><span>£</span><input type="number" min="0" step="0.5" data-set="baseline" value="${esc(st.baselineSpend)}"></span></label>
@@ -449,6 +631,7 @@ function viewAuth(msg = '') {
 
 const TABS = [
   ['today', 'Today', '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.5"/>'],
+  ['workout', 'Workout', '<path d="M6.5 6.5v11M17.5 6.5v11M3 9.5v5M21 9.5v5M6.5 12h11"/>'],
   ['progress', 'Progress', '<path d="M4 19V11M10 19V5M16 19v-6M22 19H2"/>'],
   ['goals', 'Goals', '<path d="M5 21V4l7 3 7-3v11l-7 3-7-3"/>'],
   ['settings', 'Settings', '<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1 7 17M17 7l2.1-2.1"/>'],
@@ -457,7 +640,7 @@ const TABS = [
 function render() {
   if (!S.session) { $app.innerHTML = viewAuth(S.authMsg); return; }
   const y = window.scrollY;
-  const views = { today: viewToday, progress: viewProgress, goals: viewGoals, settings: viewSettings };
+  const views = { today: viewToday, workout: viewWorkout, progress: viewProgress, goals: viewGoals, settings: viewSettings };
   $app.innerHTML = `<main class="view view-${S.view}">${views[S.view]()}</main>
     <nav class="tabbar" aria-label="Sections">${TABS.map(([id, label, icon]) => `<button type="button" class="tab${S.view === id ? ' on' : ''}" data-act="tab" data-v="${id}" aria-current="${S.view === id ? 'page' : 'false'}">
       <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${icon}</svg><span>${label}</span></button>`).join('')}</nav>
@@ -526,7 +709,19 @@ $app.addEventListener('click', async (e) => {
       break;
     }
     case 'sheet-close': S.sheet = null; render(); break;
-    case 'tab': S.view = el.dataset.v; S.openPriority = null; render(); window.scrollTo(0, 0); break;
+    case 'ex': {
+      const id = el.dataset.id; const n = Number(el.dataset.n); const s = S.wSession || defaultSession();
+      setWorkout((w) => { w[s] ||= {}; w[s][id] = Math.max(0, (w[s][id] || 0) + n); });
+      if (navigator.vibrate) navigator.vibrate(8);
+      break;
+    }
+    case 'cardio': {
+      const k = el.dataset.k; const n = Number(el.dataset.n);
+      setWorkout((w) => { w.cardio ||= {}; w.cardio[k] = Math.max(0, Math.round(((w.cardio[k] || 0) + n) * 10) / 10); });
+      break;
+    }
+    case 'wsession': S.wSession = el.dataset.v; render(); break;
+    case 'tab': S.view = el.dataset.v; S.openPriority = null; if (S.view === 'workout') S.wSession = null; render(); window.scrollTo(0, 0); break;
     case 'auth-toggle': S.authMode = S.authMode === 'signin' ? 'signup' : 'signin'; S.authMsg = ''; render(); break;
     case 'prio-open': S.openPriority = S.openPriority === el.dataset.id ? null : el.dataset.id; render(); break;
     case 'prio-set': {
@@ -573,6 +768,16 @@ $app.addEventListener('click', async (e) => {
 $app.addEventListener('change', async (e) => {
   const el = e.target;
   if (el.matches('.date-pick')) { if (el.value && el.value <= todayIso()) { S.day = el.value; render(); } return; }
+  if (el.dataset.ex) {
+    const id = el.dataset.ex; const s = S.wSession || defaultSession(); const v = Math.max(0, Math.round(Number(el.value) || 0));
+    setWorkout((w) => { w[s] ||= {}; w[s][id] = v; }, { defer: true });
+    return;
+  }
+  if (el.dataset.cardio) {
+    const k = el.dataset.cardio; const v = Math.max(0, Number(el.value) || 0);
+    setWorkout((w) => { w.cardio ||= {}; w.cardio[k] = v; }, { defer: true });
+    return;
+  }
   if (el.matches('input.time')) { setValue(el.dataset.f, el.value || null, { defer: true }); return; }
   if (el.matches('.money-in input[data-f]')) { const v = el.value === '' ? null : Math.max(0, Number(el.value)); setValue(el.dataset.f, v, { defer: true }); return; }
   if (el.matches('textarea[data-f]')) { const d = entry(); const t = el.value.trim(); if (t) d[el.dataset.f] = el.value; else delete d[el.dataset.f]; queueSave(S.day); return; }
@@ -587,6 +792,11 @@ $app.addEventListener('change', async (e) => {
   if (!k) return;
   if (k === 'baseline') S.settings.baselineSpend = Number(el.value) || 0;
   if (k === 'cd-start') S.settings.currentDaysStart = el.value || null;
+  if (k === 'w-start' || k === 'w-base') {
+    S.settings.workoutPlan = { ...DEFAULT_SETTINGS.workoutPlan, ...S.settings.workoutPlan,
+      [k === 'w-start' ? 'start' : 'base']: k === 'w-start' ? (el.value || DEFAULT_SETTINGS.workoutPlan.start) : (Number(el.value) || 400) };
+    await saveSettings(); render(); return;
+  }
   if (k === 'rem-morning' || k === 'rem-evening') {
     S.settings.reminders = { ...DEFAULT_SETTINGS.reminders, ...S.settings.reminders, [k === 'rem-morning' ? 'morning' : 'evening']: el.value };
   }
