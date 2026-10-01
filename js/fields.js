@@ -141,7 +141,7 @@ export const DEFAULT_DRINK_PLAN = [
 export const DEFAULT_SETTINGS = {
   drinkPlan: DEFAULT_DRINK_PLAN,
   baselineSpend: 12,
-  reminders: { enabled: true, morning: '07:45', evening: '21:30' },
+  reminders: { enabled: true, morning: '07:45', evening: '21:30', weeklyReview: { weekday: 0, at: '20:45' } },
   currentDaysStart: null,
   birthday: '1985-10-04',
 };

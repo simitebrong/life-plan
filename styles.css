@@ -72,6 +72,11 @@ h1, h2 { font-family: var(--display); font-weight: 650; letter-spacing: -0.01em;
 .date-sub { font-size: 14px; color: var(--ink-3); }
 .date-pick { position: absolute; inset: 0; opacity: 0; width: 100%; }
 .age-line { text-align: center; margin: 2px 0 0; font-size: 14px; color: var(--ink-2); }
+.catchup {
+  display: block; width: 100%; margin: 12px 0 0; padding: 12px 14px; border: 0; border-radius: 14px;
+  background: color-mix(in srgb, var(--a-move) 18%, var(--surface)); color: var(--ink); font-size: 15px; text-align: left;
+}
+.catchup strong { color: var(--ink); text-decoration: underline; text-underline-offset: 3px; }
 
 .score-block { display: flex; align-items: center; gap: 18px; padding: 14px 4px 6px; justify-content: center; }
 .ring { flex: none; }

@@ -262,6 +262,17 @@ function drinksFooter() {
   </div>`;
 }
 
+// Same rule as the morning reminder: only once you've started, and only if yesterday is missing or sparse and not finished.
+function yesterdayUnfinished() {
+  const y = addDays(todayIso(), -1);
+  const started = Object.keys(S.entries).some((k) => k <= y);
+  if (!started) return false;
+  const d = S.entries[y];
+  if (!d) return true;
+  const n = Object.keys(d).filter((k) => !k.startsWith('_') && !['notes', 'done', 'currentDays', 'targetAchieved'].includes(k)).length;
+  return !d.done && n < 20;
+}
+
 // ---------- views ----------
 function viewToday() {
   const d = entry();
@@ -284,6 +295,7 @@ function viewToday() {
       <button type="button" class="nav-arrow" data-act="day" data-n="1" ${isToday ? 'disabled' : ''} aria-label="Next day">›</button>
     </div>
     ${isToday ? `<p class="age-line">${esc(ageLine(S.day))}</p>` : ''}
+    ${isToday && yesterdayUnfinished() ? `<button type="button" class="catchup" data-act="day" data-n="-1">Yesterday isn’t finished yet. <strong>Fill it in</strong></button>` : ''}
     <div class="score-block">
       ${ringSVG(sc)}
       <ul class="legend">${legend}</ul>
@@ -637,7 +649,14 @@ async function enablePush() {
 
 // ---------- boot ----------
 function jumpFromUrl() {
-  const card = new URLSearchParams(location.search).get('card');
+  const q = new URLSearchParams(location.search);
+  const card = q.get('card');
+  const day = q.get('day');
+  if (day && /^\d{4}-\d{2}-\d{2}$/.test(day) && day <= todayIso()) {
+    S.view = 'today'; S.day = day; render(); window.scrollTo(0, 0);
+    history.replaceState(null, '', location.pathname);
+    return;
+  }
   if (card) {
     S.view = 'today'; S.day = todayIso(); render();
     requestAnimationFrame(() => document.getElementById(`card-${card}`)?.scrollIntoView({ block: 'start' }));
