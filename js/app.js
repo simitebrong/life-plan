@@ -531,25 +531,160 @@ function viewProgress() {
   </section>`;
 }
 
+// ---------- goals ----------
+const uid = () => (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random().toString(16).slice(2));
+const fmtDate = (iso) => new Date(iso + 'T12:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+
+async function saveGoal(g, patch) {
+  Object.assign(g, patch, { updated_at: new Date().toISOString() });
+  store.set('lp-goals', S.goals);
+  const { error } = await sb.from('goals').update({ ...patch, updated_at: g.updated_at }).eq('id', g.id);
+  if (error) console.error(error);
+}
+
+const catOptions = (sel, allowNone) => `${allowNone ? `<option value="">None</option>` : ''}${CATEGORIES.map((c) => `<option${c === sel ? ' selected' : ''}>${esc(c)}</option>`).join('')}`;
+const prioRow = (current, act, id = '') => `<div class="prio-pick" role="group" aria-label="Priority">${[1, 2, 3, 4, 5].map((n) =>
+  `<button type="button" class="prio p${n}${n === current ? ' on' : ''}" data-act="${act}" data-id="${id}" data-n="${n}" aria-label="Priority ${n}">${n}</button>`).join('')}</div>`;
+
+function stepSummary(g) {
+  const steps = g.steps || [];
+  const done = steps.filter((s) => s.done).length;
+  const planned = steps.length - done;
+  if (!steps.length) return '';
+  return [done ? `${done} done` : '', planned ? `${planned} planned` : ''].filter(Boolean).join(' · ');
+}
+
+function viewGoalNew() {
+  const p = S.newPrio || 3;
+  return `<section class="page goal-page">
+    <button type="button" class="back" data-act="goal-close">‹ Goals</button>
+    <h1>New goal</h1>
+    <form id="goal-form" class="goal-form">
+      <label>What do you want to achieve?<input name="title" required maxlength="120" placeholder="e.g. Run 5k without stopping" autocomplete="off"></label>
+      <div class="row2">
+        <label>Primary category<select name="cat1" required>${catOptions('Personal', false)}</select></label>
+        <label>Secondary category<select name="cat2">${catOptions('', true)}</select></label>
+      </div>
+      <div class="field-label">Priority</div>
+      ${prioRow(p, 'newprio')}
+      <label>First step <span class="opt-tag">optional</span><input name="step" maxlength="200" placeholder="The smallest thing you could do next" autocomplete="off"></label>
+      <button class="primary" type="submit">Add goal</button>
+    </form>
+  </section>`;
+}
+
+function viewGoalDetail(g) {
+  const steps = g.steps || [];
+  const done = steps.filter((s) => s.done);
+  const planned = steps.filter((s) => !s.done);
+  const achieved = g.status === 'achieved';
+  const stepLi = (s) => `<li class="step-item${s.done ? ' is-done' : ''}">
+    <button type="button" class="tick${s.done ? ' on' : ''}" data-act="step-toggle" data-id="${s.id}" aria-pressed="${!!s.done}" aria-label="${s.done ? 'Mark as planned' : 'Mark as done'}"></button>
+    <div class="step-text"><span>${esc(s.text)}</span><small>${s.done ? `Done ${fmtDate(s.doneAt || s.created)}` : `Added ${fmtDate(s.created)}`}</small></div>
+    <button type="button" class="clear" data-act="step-del" data-id="${s.id}" aria-label="Remove step">×</button></li>`;
+  const confirming = S.confirmDelete === g.id;
+  return `<section class="page goal-page">
+    <button type="button" class="back" data-act="goal-close">‹ ${achieved ? 'Achieved' : 'Goals'}</button>
+    ${achieved ? `<p class="achieved-badge">Achieved ${g.achieved_at ? fmtDate(g.achieved_at) : ''}</p>` : ''}
+    <textarea class="goal-title-in" data-gfield="title" rows="2" maxlength="120" aria-label="Goal">${esc(g.title)}</textarea>
+    <div class="row2">
+      <label>Primary category<select data-gfield="cat1">${catOptions(g.cat1 || 'Personal', false)}</select></label>
+      <label>Secondary category<select data-gfield="cat2">${catOptions(g.cat2 || '', true)}</select></label>
+    </div>
+    ${achieved ? '' : `<div class="field-label">Priority</div>${prioRow(g.priority, 'gprio', g.id)}`}
+
+    <h2 class="sub">Steps</h2>
+    <form id="step-form" class="step-add">
+      <input name="step" maxlength="200" placeholder="Add a step you're planning or have done" autocomplete="off" aria-label="New step">
+      <button class="primary small" type="submit">Add</button>
+    </form>
+    ${planned.length ? `<h3 class="step-h">Planned</h3><ul class="steps">${planned.map(stepLi).join('')}</ul>` : ''}
+    ${done.length ? `<h3 class="step-h">Done so far</h3><ul class="steps">${done.map(stepLi).join('')}</ul>` : ''}
+    ${!steps.length ? `<p class="micro">Break it down: what's one small thing that would move this forward?</p>` : ''}
+    <p class="micro">Tap the circle when a step is done.</p>
+
+    <h2 class="sub">Notes</h2>
+    <textarea data-gfield="notes" rows="4" placeholder="Thoughts, links, people who could help">${esc(g.notes || '')}</textarea>
+
+    <div class="goal-actions">
+      ${achieved
+        ? `<button type="button" class="secondary small" data-act="goal-unachieve">Move back to active</button>`
+        : `<button type="button" class="primary" data-act="goal-achieve">Mark as achieved</button>`}
+      <button type="button" class="danger small${confirming ? ' armed' : ''}" data-act="goal-delete">${confirming ? 'Tap again to delete for good' : 'Delete goal'}</button>
+    </div>
+  </section>`;
+}
+
 function viewGoals() {
-  const goals = [...S.goals].sort((a, b) => a.priority - b.priority || a.title.localeCompare(b.title));
-  const rows = goals.map((g) => {
-    const open = S.openPriority === g.id;
+  if (S.goalNew) return viewGoalNew();
+  const open = S.goalOpen && S.goals.find((g) => g.id === S.goalOpen);
+  if (open) return viewGoalDetail(open);
+  const tab = S.goalTab || 'active';
+  const active = S.goals.filter((g) => g.status !== 'achieved').sort((a, b) => a.priority - b.priority || a.title.localeCompare(b.title));
+  const achieved = S.goals.filter((g) => g.status === 'achieved').sort((a, b) => (b.achieved_at || '').localeCompare(a.achieved_at || ''));
+  const seg = `<div class="seg" role="group" aria-label="Goal list">
+    <button type="button" class="${tab === 'active' ? 'on' : ''}" data-act="goaltab" data-v="active">Active (${active.length})</button>
+    <button type="button" class="${tab === 'achieved' ? 'on' : ''}" data-act="goaltab" data-v="achieved">Achieved (${achieved.length})</button>
+  </div>`;
+  if (tab === 'achieved') {
+    const totalSteps = achieved.reduce((s, g) => s + (g.steps || []).filter((x) => x.done).length, 0);
+    return `<section class="page">
+      <h1>Goals</h1>
+      ${seg}
+      ${achieved.length ? `<div class="pride">
+          <span class="pride-n">${achieved.length}</span>
+          <span class="pride-l">goal${achieved.length > 1 ? 's' : ''} achieved${totalSteps ? `, built from ${totalSteps} completed step${totalSteps > 1 ? 's' : ''}` : ''}.</span>
+        </div>
+        <ul class="goal-list">${achieved.map((g) => {
+          const days = g.achieved_at && g.created_at ? Math.max(0, dayDiff(g.created_at.slice(0, 10), g.achieved_at)) : null;
+          const n = (g.steps || []).filter((s) => s.done).length;
+          return `<li class="goal won" data-act="goal-open" data-id="${g.id}">
+            <span class="won-mark" aria-hidden="true">✓</span>
+            <div class="goal-body"><span class="goal-title">${esc(g.title)}</span>
+              <span class="goal-cats">${g.achieved_at ? `Achieved ${fmtDate(g.achieved_at)}` : 'Achieved'}${n ? ` · ${n} step${n > 1 ? 's' : ''}` : ''}${days ? ` · ${days} day${days > 1 ? 's' : ''} in the making` : ''}</span></div></li>`;
+        }).join('')}</ul>`
+        : `<p class="lead">Every goal you mark as achieved lands here. This is where you'll look back and see how far you've come.</p>`}
+    </section>`;
+  }
+  const rows = active.map((g) => {
+    const openP = S.openPriority === g.id;
+    const ss = stepSummary(g);
     return `<li class="goal${S.movedGoal === g.id ? ' moved' : ''}" data-p="${g.priority}">
       <button type="button" class="prio p${g.priority}" data-act="prio-open" data-id="${g.id}" aria-label="Priority ${g.priority}, change">${g.priority}</button>
-      <div class="goal-body">
+      <div class="goal-body" data-act="goal-open" data-id="${g.id}" role="button" tabindex="0">
         <span class="goal-title">${esc(g.title)}</span>
-        <span class="goal-cats">${esc(g.cat1 || '')}${g.cat2 ? ` <span class="sep">/</span> ${esc(g.cat2)}` : ''}</span>
-        ${open ? `<div class="prio-pick" role="group" aria-label="Choose priority">${[1, 2, 3, 4, 5].map((n) => `<button type="button" class="prio p${n}${n === g.priority ? ' on' : ''}" data-act="prio-set" data-id="${g.id}" data-n="${n}">${n}</button>`).join('')}</div>` : ''}
+        <span class="goal-cats">${esc(g.cat1 || '')}${g.cat2 ? ` <span class="sep">/</span> ${esc(g.cat2)}` : ''}${ss ? ` <span class="sep">·</span> ${ss}` : ''}</span>
+        ${openP ? prioRow(g.priority, 'prio-set', g.id) : ''}
       </div>
+      <span class="chev" data-act="goal-open" data-id="${g.id}" aria-hidden="true">›</span>
     </li>`;
   }).join('');
   return `<section class="page">
     <h1>Goals</h1>
-    <p class="lead">Tap a number to change its priority. The list re-sorts itself.</p>
-    <ul class="goal-list">${rows}</ul>
-    <p class="note">Next update: your 40s vision, steps and progress notes for each goal, and ideas for how to achieve them.</p>
+    ${seg}
+    <button type="button" class="add-goal" data-act="goal-new">+ Add a goal</button>
+    <ul class="goal-list">${rows || '<li class="lead">No active goals. Add one to get started.</li>'}</ul>
+    <p class="micro">Tap a goal to add steps and notes. Tap its number to change priority.</p>
   </section>`;
+}
+
+function celebrateSheet() {
+  const g = S.celebrate;
+  const n = (g.steps || []).filter((s) => s.done).length;
+  const days = g.created_at ? Math.max(0, dayDiff(g.created_at.slice(0, 10), g.achieved_at)) : null;
+  const total = S.goals.filter((x) => x.status === 'achieved').length;
+  return `<div class="sheet-back" data-act="celebrate-close"></div>
+    <div class="sheet" role="dialog" aria-modal="true" aria-label="Goal achieved">
+      <div class="celebrate-mark" aria-hidden="true">✓</div>
+      <h2>Goal achieved</h2>
+      <p class="celebrate-title">${esc(g.title)}</p>
+      <ul class="sheet-lines">
+        ${n ? `<li>${n} step${n > 1 ? 's' : ''} took you here.</li>` : ''}
+        ${days ? `<li>${days} day${days > 1 ? 's' : ''} from setting it to doing it.</li>` : ''}
+        <li>${total === 1 ? 'Your first achieved goal of your 40s.' : `That's ${total} goals achieved.`} Be proud of this one.</li>
+      </ul>
+      <button type="button" class="primary" data-act="celebrate-close">Close</button>
+    </div>`;
 }
 
 function viewSettings() {
@@ -644,7 +779,7 @@ function render() {
   $app.innerHTML = `<main class="view view-${S.view}">${views[S.view]()}</main>
     <nav class="tabbar" aria-label="Sections">${TABS.map(([id, label, icon]) => `<button type="button" class="tab${S.view === id ? ' on' : ''}" data-act="tab" data-v="${id}" aria-current="${S.view === id ? 'page' : 'false'}">
       <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${icon}</svg><span>${label}</span></button>`).join('')}</nav>
-    ${S.sheet ? sheetHTML() : ''}`;
+    ${S.sheet ? sheetHTML() : ''}${S.celebrate ? celebrateSheet() : ''}`;
   window.scrollTo(0, y);
   setSaveState(S.saveState);
 }
@@ -721,7 +856,58 @@ $app.addEventListener('click', async (e) => {
       break;
     }
     case 'wsession': S.wSession = el.dataset.v; render(); break;
-    case 'tab': S.view = el.dataset.v; S.openPriority = null; if (S.view === 'workout') S.wSession = null; render(); window.scrollTo(0, 0); break;
+    case 'tab': S.view = el.dataset.v; S.openPriority = null; S.goalOpen = null; S.goalNew = false; S.confirmDelete = null; if (S.view === 'workout') S.wSession = null; render(); window.scrollTo(0, 0); break;
+    case 'goaltab': S.goalTab = el.dataset.v; S.openPriority = null; render(); break;
+    case 'goal-new': S.goalNew = true; S.newPrio = 3; render(); window.scrollTo(0, 0); document.querySelector('#goal-form input[name=title]')?.focus(); break;
+    case 'goal-close': S.goalNew = false; S.goalOpen = null; S.confirmDelete = null; render(); window.scrollTo(0, 0); break;
+    case 'goal-open': S.goalOpen = el.dataset.id; S.openPriority = null; S.confirmDelete = null; render(); window.scrollTo(0, 0); break;
+    case 'newprio': {
+      S.newPrio = Number(el.dataset.n);
+      el.parentElement.querySelectorAll('.prio').forEach((b) => b.classList.toggle('on', b === el));
+      break;
+    }
+    case 'gprio': {
+      const g = S.goals.find((x) => x.id === el.dataset.id);
+      await saveGoal(g, { priority: Number(el.dataset.n) }); render();
+      break;
+    }
+    case 'step-toggle': case 'step-del': {
+      const g = S.goals.find((x) => x.id === S.goalOpen);
+      let steps = [...(g.steps || [])];
+      if (act === 'step-del') steps = steps.filter((s) => s.id !== el.dataset.id);
+      else steps = steps.map((s) => (s.id === el.dataset.id ? { ...s, done: !s.done, doneAt: !s.done ? todayIso() : null } : s));
+      g.steps = steps; render();
+      await saveGoal(g, { steps });
+      break;
+    }
+    case 'goal-achieve': {
+      const g = S.goals.find((x) => x.id === S.goalOpen);
+      S.goalOpen = null; S.goalTab = 'achieved';
+      g.status = 'achieved'; g.achieved_at = todayIso();
+      S.celebrate = g; render(); window.scrollTo(0, 0);
+      await saveGoal(g, { status: 'achieved', achieved_at: g.achieved_at });
+      break;
+    }
+    case 'goal-unachieve': {
+      const g = S.goals.find((x) => x.id === S.goalOpen);
+      await saveGoal(g, { status: 'active', achieved_at: null });
+      S.goalOpen = null; S.goalTab = 'active'; render();
+      break;
+    }
+    case 'goal-delete': {
+      const id = S.goalOpen;
+      if (S.confirmDelete !== id) {
+        S.confirmDelete = id; render();
+        setTimeout(() => { if (S.confirmDelete === id) { S.confirmDelete = null; render(); } }, 4000);
+        break;
+      }
+      S.goals = S.goals.filter((x) => x.id !== id);
+      S.goalOpen = null; S.confirmDelete = null;
+      store.set('lp-goals', S.goals); render();
+      await sb.from('goals').delete().eq('id', id);
+      break;
+    }
+    case 'celebrate-close': S.celebrate = null; render(); break;
     case 'auth-toggle': S.authMode = S.authMode === 'signin' ? 'signup' : 'signin'; S.authMsg = ''; render(); break;
     case 'prio-open': S.openPriority = S.openPriority === el.dataset.id ? null : el.dataset.id; render(); break;
     case 'prio-set': {
@@ -768,6 +954,15 @@ $app.addEventListener('click', async (e) => {
 $app.addEventListener('change', async (e) => {
   const el = e.target;
   if (el.matches('.date-pick')) { if (el.value && el.value <= todayIso()) { S.day = el.value; render(); } return; }
+  if (el.dataset.gfield) {
+    const g = S.goals.find((x) => x.id === S.goalOpen);
+    if (!g) return;
+    const k = el.dataset.gfield; let v = el.value;
+    if (k === 'title') { v = v.trim(); if (!v) { el.value = g.title; return; } }
+    if (k === 'cat2' || k === 'notes') v = v.trim() || null;
+    await saveGoal(g, { [k]: v });
+    return;
+  }
   if (el.dataset.ex) {
     const id = el.dataset.ex; const s = S.wSession || defaultSession(); const v = Math.max(0, Math.round(Number(el.value) || 0));
     setWorkout((w) => { w[s] ||= {}; w[s][id] = v; }, { defer: true });
@@ -810,6 +1005,34 @@ $app.addEventListener('input', (e) => {
 });
 
 $app.addEventListener('submit', async (e) => {
+  if (e.target.id === 'goal-form') {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    const title = String(fd.get('title') || '').trim();
+    if (!title) return;
+    const step = String(fd.get('step') || '').trim();
+    const row = { title, cat1: fd.get('cat1') || 'Personal', cat2: fd.get('cat2') || null, priority: S.newPrio || 3, status: 'active',
+      steps: step ? [{ id: uid(), text: step, done: false, created: todayIso() }] : [] };
+    const { data, error } = await sb.from('goals').insert(row).select('*').single();
+    const g = error ? { ...row, id: uid(), created_at: new Date().toISOString() } : data;
+    if (error) console.error(error);
+    S.goals.push(g); store.set('lp-goals', S.goals);
+    S.goalNew = false; S.goalTab = 'active'; S.movedGoal = g.id; render(); window.scrollTo(0, 0);
+    setTimeout(() => { S.movedGoal = null; }, 1500);
+    return;
+  }
+  if (e.target.id === 'step-form') {
+    e.preventDefault();
+    const input = e.target.querySelector('input[name=step]');
+    const text = input.value.trim();
+    if (!text) return;
+    const g = S.goals.find((x) => x.id === S.goalOpen);
+    const steps = [...(g.steps || []), { id: uid(), text, done: false, created: todayIso() }];
+    g.steps = steps; render();
+    document.querySelector('#step-form input')?.focus();
+    await saveGoal(g, { steps });
+    return;
+  }
   if (e.target.id !== 'auth-form') return;
   e.preventDefault();
   const fd = new FormData(e.target);

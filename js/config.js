@@ -1,4 +1,4 @@
 export const SUPABASE_URL = 'https://mocrfuxqybkocagjwude.supabase.co';
 export const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1vY3JmdXhxeWJrb2NhZ2p3dWRlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTA4NDI2MzAsImV4cCI6MjEwNjQxODYzMH0.oLzuggccebHIG1-2xATMg5j2RbmlPTLR6KXVLUCyrFw';
 export const VAPID_PUBLIC_KEY = 'BMN_ICZOUaLHSY_NuLiwAbj48EaosO_yo4oHCrfssdaHcTmG9btwXy1O05sd0-as5o0a1IL13waj8bS5TSu3lcU';
-export const APP_VERSION = '1.2.1';
+export const APP_VERSION = '1.3.0';
