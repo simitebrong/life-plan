@@ -101,6 +101,9 @@ export const FIELDS = [
   { id: 'visualisation', card: 'mind', area: 'mind', label: 'Visualisation', type: 'choice', options: yesno(10, 0) },
   { id: 'fcProject', card: 'mind', area: 'mind', label: 'FC project', type: 'choice',
     options: [o('none', 'None', 0), o('some', 'Some', 10), o('lots', 'Lots', 20)] },
+  { id: 'basil', card: 'mind', area: 'mind', label: 'Basil', type: 'multi', cap: 20,
+    options: [o('none', 'None', 0, { exclusive: true }), o('written', 'Written', 20), o('read', 'Read', 20),
+      o('edited', 'Edited', 20), o('submitted', 'Submitted', 20)] },
   { id: 'social', card: 'mind', area: 'mind', label: 'Social', type: 'choice',
     options: [o('none', 'None', 0), o('arranged', 'Arranged', 5), o('attended', 'Attended', 10)] },
   { id: 'fun', card: 'mind', area: 'mind', label: 'Fun & hobbies', type: 'choice',
@@ -246,7 +249,10 @@ export function fieldPoints(f, v, ctx) {
   if (!answered(v)) return null;
   switch (f.type) {
     case 'choice': return f.options.find((x) => x.v === v)?.pts ?? 0;
-    case 'multi': return v.reduce((s, x) => s + (f.options.find((y) => y.v === x)?.pts ?? 0), 0);
+    case 'multi': {
+      const sum = v.reduce((s, x) => s + (f.options.find((y) => y.v === x)?.pts ?? 0), 0);
+      return f.cap != null ? Math.min(sum, f.cap) : sum;
+    }
     case 'time': return band(f.bands, timeToMins(v, f.evening));
     case 'auto': return band(f.bands, v);
     case 'workout': {
