@@ -376,6 +376,7 @@ function viewWorkout() {
     return `<div class="ex${n + otherN > 0 ? ' done' : ''}">
       <div class="ex-head">
         <span class="ex-name">${esc(e.name)}</span>
+        <button type="button" class="guide-btn" data-act="guide" data-id="${e.id}" aria-label="How to do ${esc(e.name)}">How to</button>
         <span class="ex-pts">${earned ? `<strong>+${earned}</strong>` : `${e.pts} pt${e.pts > 1 ? 's' : ''} per ${sec ? 'second' : 'rep'}`}</span>
       </div>
       <div class="ex-ctrl">
@@ -415,7 +416,8 @@ function viewWorkout() {
 
     ${EX_GROUPS.map(([g, label]) => `<section class="card ex-group" style="--accent:var(--a-move)">
       <header class="card-head"><h2>${label}</h2><span class="card-meta">${EXERCISES.filter((e) => e.area === g && b.totals[e.id] > 0).length}/${EXERCISES.filter((e) => e.area === g).length}</span></header>
-      ${EXERCISES.filter((e) => e.area === g).map(row).join('')}
+      ${EXERCISES.filter((e) => e.area === g && !e.standing).map(row).join('')}
+      ${g === 'core' ? `<div class="group-label standing-label">Standing core <span>no floor needed</span></div>${EXERCISES.filter((e) => e.standing).map(row).join('')}` : ''}
     </section>`).join('')}
 
     <section class="card ex-group" style="--accent:var(--a-move)">
@@ -444,6 +446,7 @@ function viewWorkout() {
     <div class="wk">${strip}</div>
     <p class="micro">${weekTotal ? `<strong>${weekTotal}</strong> points across ${weekDays} day${weekDays > 1 ? 's' : ''} this week.` : 'Your week starts with the first rep.'}</p>
     <p class="micro">Your score flows into Today under Movement and fills in your Morning and Midday workout automatically.</p>
+    <p class="micro"><a class="doc-link" href="/guides/all-exercises.pdf" target="_blank" rel="noopener">All exercise guides in one PDF</a></p>
   </section>`;
 }
 
@@ -677,6 +680,18 @@ function viewGoals() {
   </section>`;
 }
 
+function guideSheet() {
+  const e = EXERCISES.find((x) => x.id === S.guide);
+  return `<div class="sheet-back" data-act="guide-close"></div>
+    <div class="sheet guide-sheet" role="dialog" aria-modal="true" aria-label="How to do ${esc(e.name)}">
+      <div class="guide-scroll"><img src="/guides/${e.id}.webp" alt="Illustrated guide: ${esc(e.name)}" width="480" loading="eager"></div>
+      <div class="btn-row guide-actions">
+        <button type="button" class="primary small" data-act="guide-close">Close</button>
+        <a class="secondary small as-btn" href="/guides/${e.id}.pdf" target="_blank" rel="noopener">Open as PDF</a>
+      </div>
+    </div>`;
+}
+
 function celebrateSheet() {
   const g = S.celebrate;
   const n = (g.steps || []).filter((s) => s.done).length;
@@ -798,7 +813,7 @@ function render() {
       <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${COG}</svg></button>
     <nav class="tabbar" aria-label="Sections">${TABS.map(([id, label, icon]) => `<button type="button" class="tab${S.view === id ? ' on' : ''}" data-act="tab" data-v="${id}" aria-current="${S.view === id ? 'page' : 'false'}">
       <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${icon}</svg><span>${label}</span></button>`).join('')}</nav>`}
-    ${S.sheet ? sheetHTML() : ''}${S.celebrate ? celebrateSheet() : ''}`;
+    ${S.sheet ? sheetHTML() : ''}${S.celebrate ? celebrateSheet() : ''}${S.guide ? guideSheet() : ''}`;
   window.scrollTo(0, y);
   setSaveState(S.saveState);
   if (immersive) document.body.dataset.rt = store.get('lp-reader', {}).theme || 'auto'; else delete document.body.dataset.rt;
@@ -878,6 +893,8 @@ $app.addEventListener('click', async (e) => {
       break;
     }
     case 'wsession': S.wSession = el.dataset.v; render(); break;
+    case 'guide': S.guide = el.dataset.id; render(); break;
+    case 'guide-close': S.guide = null; render(); break;
     case 'tab': S.view = el.dataset.v; lib.reset(); S.openPriority = null; S.goalOpen = null; S.goalNew = false; S.confirmDelete = null; if (S.view === 'workout') S.wSession = null; render(); window.scrollTo(0, 0); break;
     case 'goaltab': S.goalTab = el.dataset.v; S.openPriority = null; render(); break;
     case 'goal-new': S.goalNew = true; S.newPrio = 3; render(); window.scrollTo(0, 0); document.querySelector('#goal-form input[name=title]')?.focus(); break;

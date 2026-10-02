@@ -488,3 +488,17 @@ body[data-rt] { background: var(--bg); color: var(--ink); }
 .goal-page .add-goal + .add-goal, .goal-page .add-goal + .step-add { margin-top: 0; }
 .goal-page .add-goal, .goal-page .step-add { margin-top: 10px; }
 .goal-page .lib-msg { margin-top: 10px; }
+
+/* ---------- exercise guides ---------- */
+.ex-head { align-items: center; }
+.ex-name { margin-right: auto; }
+.guide-btn { flex: none; border: 1.5px solid var(--line); background: var(--surface); color: var(--primary); font-size: 12.5px; font-weight: 700; padding: 4px 10px; border-radius: 999px; min-height: 30px; }
+.standing-label { margin-top: 4px; }
+.standing-label span { font-family: var(--body); font-weight: 400; font-size: 13px; color: var(--ink-3); margin-left: 6px; }
+.standing-label + .ex { border-top: 0; }
+.guide-sheet { padding: 10px 10px calc(12px + env(safe-area-inset-bottom)); max-height: 94vh; display: flex; flex-direction: column; }
+.guide-scroll { overflow-y: auto; border-radius: 16px; -webkit-overflow-scrolling: touch; }
+.guide-scroll img { width: 100%; height: auto; display: block; border-radius: 16px; background: #F9FAF6; }
+.guide-actions { justify-content: center; padding-top: 10px; }
+.as-btn { display: inline-grid; place-items: center; text-decoration: none; color: var(--ink); font-weight: 700; }
+.doc-link { color: var(--primary); font-weight: 700; }

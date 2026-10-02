@@ -171,6 +171,15 @@ export const EXERCISES = [
   { id: 'russianTwists', name: 'Russian twists', pts: 2, area: 'core' },
   { id: 'mountainClimbers', name: 'Mountain climbers', pts: 3, area: 'core' },
   { id: 'plank', name: 'Plank', pts: 5, area: 'core', unit: 'sec' },
+  // Standing core: counts as Core, but isn't needed for the all-exercises bonus
+  { id: 'kneeToElbow', name: 'Standing knee-to-elbow crunch', pts: 1, area: 'core', standing: true },
+  { id: 'standingSideCrunch', name: 'Standing side crunch', pts: 1, area: 'core', standing: true },
+  { id: 'slowMarches', name: 'Slow standing marches', pts: 1, area: 'core', standing: true },
+  { id: 'crossBodyKneeDrive', name: 'Standing cross-body knee drive', pts: 1, area: 'core', standing: true },
+  { id: 'torsoRotations', name: 'Standing torso rotations', pts: 1, area: 'core', standing: true },
+  { id: 'lateralBends', name: 'Standing lateral bends', pts: 1, area: 'core', standing: true },
+  { id: 'singleLegBalance', name: 'Single-leg balance + brace', pts: 1, area: 'core', standing: true, unit: 'sec' },
+  { id: 'abdominalBrace', name: 'Standing abdominal brace', pts: 1, area: 'core', standing: true, unit: 'sec' },
   { id: 'squats', name: 'Squats', pts: 2, area: 'lower' },
   { id: 'backwardLunges', name: 'Backward lunges', pts: 3, area: 'lower' },
   { id: 'hydrants', name: 'Hydrants', pts: 2, area: 'lower' },
@@ -195,8 +204,9 @@ export function workoutBreakdown(w) {
   const reps = EXERCISES.reduce((s, e) => s + (totals[e.id] || 0) * e.pts, 0);
   const mins = Number(w?.cardio?.mins) || 0; const km = Number(w?.cardio?.km) || 0;
   const cardio = Math.round(mins * CARDIO_PTS.perMin + km * CARDIO_PTS.perKm);
-  const boxes = EXERCISES.filter((e) => totals[e.id] > 0).length + (mins > 0 || km > 0 ? 1 : 0);
-  const boxTotal = EXERCISES.length + 1;
+  const main = EXERCISES.filter((e) => !e.standing);
+  const boxes = main.filter((e) => totals[e.id] > 0).length + (mins > 0 || km > 0 ? 1 : 0);
+  const boxTotal = main.length + 1;
   const bonus = boxes === boxTotal ? ALL_BOX_BONUS : 0;
   return { reps, cardio, bonus, boxes, boxTotal, total: reps + cardio + bonus, totals };
 }
