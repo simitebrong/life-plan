@@ -133,8 +133,19 @@ export function createLibrary(api) {
   const uid = () => crypto.randomUUID();
   const shelfById = (id) => L.shelves.find((s) => s.id === id);
   const itemById = (id) => L.items.find((i) => i.id === id);
-  const sortedShelves = () => [...L.shelves].sort((a, b) => a.position - b.position || a.name.localeCompare(b.name));
-  const itemsOn = (shelfId) => L.items.filter((i) => i.shelf_id === shelfId).sort((a, b) => a.title.localeCompare(b.title));
+  const natural = (a, b) => a.localeCompare(b, 'en', { numeric: true, sensitivity: 'base' });
+  const byPos = (a, b) => a.position - b.position || natural(a.name, b.name);
+  // shelves directly inside a parent (null = top level)
+  const childShelves = (parentId = null) => L.shelves.filter((s) => (s.parent_id || null) === parentId).sort(byPos);
+  const itemsOn = (shelfId) => L.items.filter((i) => i.shelf_id === shelfId).sort((a, b) => natural(a.title, b.title));
+  const ancestors = (s) => { const out = []; let cur = s; let guard = 0; while (cur?.parent_id && guard++ < 20) { cur = shelfById(cur.parent_id); if (cur) out.unshift(cur); } return out; };
+  const shelfPath = (s) => [...ancestors(s), s].map((x) => x.name).join(' › ');
+  const descendants = (id) => { const out = []; const walk = (pid) => childShelves(pid).forEach((c) => { out.push(c); walk(c.id); }); walk(id); return out; };
+  const countInside = (id) => [id, ...descendants(id).map((d) => d.id)].reduce((n, sid) => n + L.items.filter((i) => i.shelf_id === sid).length, 0);
+  // a shelf counts as Basil if it, or any shelf above it, is the Basil shelf
+  const inBasil = (shelfId) => { const s = shelfById(shelfId); return !!s && (s.is_basil || ancestors(s).some((a) => a.is_basil)); };
+  // every shelf, flattened in tree order, for pickers
+  const shelfTree = () => { const out = []; const walk = (pid, depth) => childShelves(pid).forEach((c) => { out.push({ s: c, depth }); walk(c.id, depth + 1); }); walk(null, 0); return out; };
   const notesFor = (itemId) => L.notes.filter((n) => n.item_id === itemId);
   const ITEM_COLS = 'id,shelf_id,goal_id,title,kind,url,file_path,chars,progress,last_read_at,created_at';
   const KIND = { text: 'Manuscript', pdf: 'PDF', link: 'Link', note: 'Note' };
@@ -241,7 +252,7 @@ export function createLibrary(api) {
     const d = api.entryFor(day);
     d.readSecs = (d.readSecs || 0) + add;
     const item = itemById(L.item);
-    if (item && shelfById(item.shelf_id)?.is_basil) {
+    if (item && inBasil(item.shelf_id)) {
       const before = d.basilReadSecs || 0;
       d.basilReadSecs = before + add;
       const has = Array.isArray(d.basil) && d.basil.includes('read');
@@ -293,11 +304,23 @@ export function createLibrary(api) {
   }
 
   // ---------- upload ----------
-  async function handleFile(file, shelfId) {
+  async function handleFiles(files, shelfId) {
+    const list = [...files].sort((a, b) => natural(a.name, b.name));
+    if (list.length === 1) return handleFile(list[0], shelfId);
+    let ok = 0; const problems = [];
+    for (let k = 0; k < list.length; k++) {
+      await handleFile(list[k], shelfId, `Adding ${k + 1} of ${list.length}…`);
+      if (L.lastOk) ok += 1; else problems.push(`${list[k].name}: ${L.msg}`);
+    }
+    L.msg = `Added ${ok} of ${list.length} files.${problems.length ? ' Not added: ' + problems.join(' ') : ''}`;
+    render();
+  }
+  async function handleFile(file, shelfId, progressMsg) {
+    L.lastOk = false;
     const name = file.name || 'Untitled';
     const ext = name.split('.').pop().toLowerCase();
     const title = name.replace(/\.[^.]+$/, '').replace(/[_]+/g, ' ').trim() || 'Untitled';
-    L.busy = true; L.adding = null; L.msg = ext === 'pdf' ? 'Uploading…' : 'Converting…'; render();
+    L.busy = true; L.adding = null; L.msg = progressMsg || (ext === 'pdf' ? 'Uploading…' : 'Converting…'); render();
     try {
       if (ext === 'doc') throw new Error('That is an older Word format. Open it in Word, choose Save As → Word Document (.docx), then add it again.');
       let row;
@@ -315,7 +338,7 @@ export function createLibrary(api) {
       const { data, error } = await sb.from('library_items').insert(row).select(ITEM_COLS).single();
       if (error) throw new Error('It could not be saved. Check your connection and try again.');
       if (row.content) await idb.set(data.id, row.content);
-      L.items.push(data); persist();
+      L.items.push(data); persist(); L.lastOk = true;
       L.msg = row.kind === 'text' ? `Added “${title}”: ${row.content.chapters.length} chapter${row.content.chapters.length > 1 ? 's' : ''}, about ${Math.round(row.chars / 5.7 / 100) * 100} words.` : `Added “${title}”.`;
     } catch (err) { L.msg = err.message || 'Something went wrong adding that file.'; }
     L.busy = false; render();
@@ -323,7 +346,7 @@ export function createLibrary(api) {
 
   // ---------- views ----------
   function continueItem(basilOnly) {
-    const pool = L.items.filter((i) => i.kind === 'text' && (!basilOnly || shelfById(i.shelf_id)?.is_basil));
+    const pool = L.items.filter((i) => i.kind === 'text' && (!basilOnly || inBasil(i.shelf_id)));
     if (!pool.length) return null;
     const read = pool.filter((i) => i.last_read_at && (i.progress?.pct ?? 0) < 100).sort((a, b) => b.last_read_at.localeCompare(a.last_read_at));
     return read[0] || pool.filter((i) => !i.last_read_at).sort((a, b) => a.created_at.localeCompare(b.created_at))[0] || pool.sort((a, b) => (b.last_read_at || '').localeCompare(a.last_read_at || ''))[0];
@@ -344,10 +367,19 @@ export function createLibrary(api) {
     return `<button type="button" class="basil-card" data-act="l-read" data-id="${it.id}">
       <span class="bc-k">${esc(basil?.name || 'Basil')}${mins ? ` · ${mins} min today` : ''}</span>
       <span class="bc-t">${esc(it.title)}</span>
-      <span class="bc-s">${where}. ${pr?.ts ? 'Continue reading' : 'Start reading'}</span>
+      <span class="bc-s">${shelfById(it.shelf_id)?.parent_id ? esc(shelfById(it.shelf_id).name) + ' · ' : ''}${where}. ${pr?.ts ? 'Continue reading' : 'Start reading'}</span>
       <span class="bc-bar"><span style="width:${pr?.pct || 0}%"></span></span>
       <span class="bc-go" aria-hidden="true">›</span>
     </button>`;
+  }
+
+  function shelfRow(s) {
+    const n = countInside(s.id); const subs = childShelves(s.id).length;
+    const meta = [subs ? `${subs} shel${subs > 1 ? 'ves' : 'f'}` : '', n ? `${n} item${n > 1 ? 's' : ''}` : (subs ? '' : 'Empty'), s.is_basil ? 'shown on Today' : ''].filter(Boolean).join(' · ');
+    return `<li class="goal shelf" data-act="l-shelf" data-id="${s.id}">
+      <span class="shelf-ic" aria-hidden="true"></span>
+      <div class="goal-body"><span class="goal-title">${esc(s.name)}</span><span class="goal-cats">${meta}</span></div>
+      <span class="chev" aria-hidden="true">›</span></li>`;
   }
 
   function goalSection(goalId) {
@@ -375,28 +407,29 @@ export function createLibrary(api) {
       ${cont && cont.progress?.ts ? `<button type="button" class="basil-card" data-act="l-read" data-id="${cont.id}">
         <span class="bc-k">Continue reading</span><span class="bc-t">${esc(cont.title)}</span>
         <span class="bc-s">${cont.progress.pct}% through</span><span class="bc-bar"><span style="width:${cont.progress.pct}%"></span></span><span class="bc-go" aria-hidden="true">›</span></button>` : ''}
-      <ul class="goal-list shelves">${sortedShelves().map((s) => {
-        const n = itemsOn(s.id).length;
-        return `<li class="goal shelf" data-act="l-shelf" data-id="${s.id}">
-          <div class="goal-body"><span class="goal-title">${esc(s.name)}</span><span class="goal-cats">${n ? `${n} item${n > 1 ? 's' : ''}` : 'Empty'}${s.is_basil ? ' · shown on Today' : ''}</span></div>
-          <span class="chev" aria-hidden="true">›</span></li>`;
-      }).join('')}</ul>
+      <ul class="goal-list shelves">${childShelves(null).map(shelfRow).join('')}</ul>
       ${L.newShelf ? `<form id="shelf-form" class="step-add"><input name="name" maxlength="60" placeholder="Shelf name" aria-label="Shelf name" autocomplete="off"><button class="primary small" type="submit">Add</button></form>`
         : `<button type="button" class="add-goal" data-act="l-newshelf">+ New shelf</button>`}
-      <p class="micro">Shelves hold manuscripts, guides, PDFs, links and notes. Open a shelf to rename it or add to it.</p>
+      <p class="micro">Shelves hold manuscripts, guides, PDFs, links and notes. Open a shelf to rename it, add to it, or put shelves inside it.</p>
     </section>`;
   }
 
   function viewShelf(s) {
     const items = itemsOn(s.id);
-    const order = sortedShelves(); const idx = order.findIndex((x) => x.id === s.id);
+    const subs = childShelves(s.id);
+    const order = childShelves(s.parent_id || null); const idx = order.findIndex((x) => x.id === s.id);
     const confirming = L.confirm === s.id;
+    const parent = s.parent_id && shelfById(s.parent_id);
+    const blocked = new Set([s.id, ...descendants(s.id).map((d) => d.id)]);
+    const basilHere = inBasil(s.id);
     return `<section class="page goal-page">
-      <button type="button" class="back" data-act="l-home">‹ Library</button>
+      ${parent ? `<button type="button" class="back" data-act="l-shelf" data-id="${parent.id}">‹ ${esc(parent.name)}</button>` : `<button type="button" class="back" data-act="l-home">‹ Library</button>`}
+      ${parent?.parent_id ? `<p class="crumbs">${esc(shelfPath(parent))}</p>` : ''}
       <input class="goal-title-in shelf-name" data-lfield="shelf-name" value="${esc(s.name)}" maxlength="60" aria-label="Shelf name">
-      <p class="micro">Tap the name to rename this shelf.${s.is_basil ? ' Manuscripts here appear on Today and count towards Basil.' : ''}</p>
+      <p class="micro">Tap the name to rename this shelf.${basilHere ? ' Manuscripts here appear on Today and count towards Basil.' : ''}</p>
       ${L.msg ? `<p class="lib-msg${L.busy ? ' busy' : ''}">${esc(L.msg)}</p>` : ''}
-      <ul class="goal-list">${items.map(itemRow).join('') || '<li class="micro">Nothing here yet.</li>'}</ul>
+      ${subs.length ? `<ul class="goal-list shelves">${subs.map(shelfRow).join('')}</ul>` : ''}
+      ${items.length ? `<ul class="goal-list items">${items.map(itemRow).join('')}</ul>` : (subs.length ? '' : '<p class="micro">Nothing here yet.</p>')}
 
       ${L.adding === 'link' ? `<form id="link-form" class="goal-form lib-form">
           <label>Title<input name="title" required maxlength="120" autocomplete="off"></label>
@@ -407,20 +440,23 @@ export function createLibrary(api) {
           <label>Note<textarea name="text" rows="6" required></textarea></label>
           <div class="btn-row"><button class="primary small" type="submit">Save note</button><button type="button" class="secondary small" data-act="l-add-cancel">Cancel</button></div></form>`
       : L.adding === 'menu' ? `<div class="add-menu">
-          <label class="add-opt">Upload a file<small>Word (.docx), PDF or text</small>
-            <input type="file" class="file-in" data-lfile="${s.id}" accept=".docx,.pdf,.txt,.md,.doc,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain"></label>
+          <label class="add-opt">Upload files<small>Word (.docx), PDF or text. Pick several at once if you like</small>
+            <input type="file" multiple class="file-in" data-lfile="${s.id}" accept=".docx,.pdf,.txt,.md,.doc,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain"></label>
           <button type="button" class="add-opt" data-act="l-add" data-v="link">Add a link<small>A web page or video</small></button>
           <button type="button" class="add-opt" data-act="l-add" data-v="note">Write a note<small>Your own reference text</small></button>
           <button type="button" class="link" data-act="l-add-cancel">Cancel</button></div>`
       : `<button type="button" class="add-goal" data-act="l-add" data-v="menu" ${L.busy ? 'disabled' : ''}>+ Add to this shelf</button>`}
+      ${L.adding ? '' : (L.newShelf ? `<form id="shelf-form" class="step-add"><input name="name" maxlength="60" placeholder="Name, e.g. Vol 1" aria-label="Shelf name" autocomplete="off"><button class="primary small" type="submit">Add</button></form>`
+        : `<button type="button" class="add-goal" data-act="l-newshelf">+ New shelf inside ${esc(s.name)}</button>`)}
 
       <div class="shelf-tools">
         <button type="button" class="secondary small" data-act="l-shelf-move" data-n="-1" ${idx === 0 ? 'disabled' : ''}>Move up</button>
         <button type="button" class="secondary small" data-act="l-shelf-move" data-n="1" ${idx === order.length - 1 ? 'disabled' : ''}>Move down</button>
-        ${s.is_basil ? '' : `<button type="button" class="secondary small" data-act="l-shelf-basil">Show this shelf on Today</button>`}
+        ${basilHere ? '' : `<button type="button" class="secondary small" data-act="l-shelf-basil">Show this shelf on Today</button>`}
       </div>
+      <label class="move-into">Keep this shelf inside<select data-lfield="shelf-parent"><option value="">Library (top level)</option>${shelfTree().filter((x) => !blocked.has(x.s.id)).map((x) => `<option value="${x.s.id}"${x.s.id === s.parent_id ? ' selected' : ''}>${'\u00a0\u00a0'.repeat(x.depth)}${esc(x.s.name)}</option>`).join('')}</select></label>
       <div class="goal-actions">
-        ${items.length ? `<p class="micro">To delete this shelf, move or delete its items first.</p>`
+        ${items.length || subs.length ? `<p class="micro">To delete this shelf, move or delete what's inside it first.</p>`
           : `<button type="button" class="danger small${confirming ? ' armed' : ''}" data-act="l-shelf-del">${confirming ? 'Tap again to delete this shelf' : 'Delete shelf'}</button>`}
       </div>
     </section>`;
@@ -451,12 +487,13 @@ export function createLibrary(api) {
     }
     return `<section class="page goal-page">
       <button type="button" class="back" data-act="l-shelf" data-id="${i.shelf_id}">‹ ${esc(s?.name || 'Library')}</button>
+      ${s?.parent_id ? `<p class="crumbs">${esc(shelfPath(s))}</p>` : ''}
       <span class="kind k-${i.kind}">${KIND[i.kind]}</span>
       <textarea class="goal-title-in" data-lfield="item-title" rows="2" maxlength="160" aria-label="Title">${esc(i.title)}</textarea>
       ${body}
       <h2 class="sub">Organise</h2>
       <div class="row2">
-        <label>Shelf<select data-lfield="item-shelf">${sortedShelves().map((x) => `<option value="${x.id}"${x.id === i.shelf_id ? ' selected' : ''}>${esc(x.name)}</option>`).join('')}</select></label>
+        <label>Shelf<select data-lfield="item-shelf">${shelfTree().map((x) => `<option value="${x.s.id}"${x.s.id === i.shelf_id ? ' selected' : ''}>${'\u00a0\u00a0'.repeat(x.depth)}${esc(x.s.name)}</option>`).join('')}</select></label>
         <label>Linked goal<select data-lfield="item-goal"><option value="">None</option>${S.goals.filter((g) => g.status !== 'achieved' || g.id === i.goal_id).sort((a, b) => a.title.localeCompare(b.title)).map((g) => `<option value="${g.id}"${g.id === i.goal_id ? ' selected' : ''}>${esc(g.title)}</option>`).join('')}</select></label>
       </div>
       <div class="goal-actions"><button type="button" class="danger small${confirming ? ' armed' : ''}" data-act="l-item-del">${confirming ? 'Tap again to delete for good' : 'Delete from library'}</button></div>
@@ -617,15 +654,15 @@ export function createLibrary(api) {
     const item = L.item && itemById(L.item);
     switch (act) {
       case 'l-home': L.shelf = null; L.item = null; L.adding = null; L.msg = ''; L.newShelf = false; render(); window.scrollTo(0, 0); break;
-      case 'l-shelf': S.view = 'library'; L.shelf = el.dataset.id; L.item = null; L.reading = false; L.content = null; L.panel = null; L.adding = null; L.confirm = null; L.msg = ''; render(); window.scrollTo(0, 0); break;
+      case 'l-shelf': S.view = 'library'; L.newShelf = false; L.shelf = el.dataset.id; L.item = null; L.reading = false; L.content = null; L.panel = null; L.adding = null; L.confirm = null; L.msg = ''; render(); window.scrollTo(0, 0); break;
       case 'l-item': L.content = L.item === el.dataset.id ? L.content : null; await openItem(el.dataset.id); break;
       case 'l-read': if (L.item !== el.dataset.id) L.content = null; await openReader(el.dataset.id); break;
       case 'l-close': L.reading = false; L.panel = null; L.sel = null; render(); window.scrollTo(0, 0); break;
       case 'l-newshelf': L.newShelf = true; render(); document.querySelector('#shelf-form input')?.focus(); break;
-      case 'l-add': L.adding = el.dataset.v; L.msg = ''; render(); break;
+      case 'l-add': L.adding = el.dataset.v; L.newShelf = false; L.msg = ''; render(); break;
       case 'l-add-cancel': L.adding = null; render(); break;
       case 'l-shelf-move': {
-        const order = sortedShelves(); const idx = order.findIndex((x) => x.id === L.shelf); const j = idx + Number(el.dataset.n);
+        const order = childShelves(shelfById(L.shelf)?.parent_id || null); const idx = order.findIndex((x) => x.id === L.shelf); const j = idx + Number(el.dataset.n);
         if (j < 0 || j >= order.length) break;
         [order[idx], order[j]] = [order[j], order[idx]];
         order.forEach((s, k) => { s.position = k; });
@@ -643,7 +680,8 @@ export function createLibrary(api) {
       case 'l-shelf-del': {
         const id = L.shelf;
         if (L.confirm !== id) { L.confirm = id; render(); setTimeout(() => { if (L.confirm === id) { L.confirm = null; render(); } }, 4000); break; }
-        L.shelves = L.shelves.filter((s) => s.id !== id); L.shelf = null; L.confirm = null; persist(); render();
+        const parentId = shelfById(id)?.parent_id || null;
+        L.shelves = L.shelves.filter((s) => s.id !== id); L.shelf = parentId; L.confirm = null; persist(); render();
         await sb.from('shelves').delete().eq('id', id);
         break;
       }
@@ -698,13 +736,19 @@ export function createLibrary(api) {
   }
 
   async function onChange(el) {
-    if (el.dataset.lfile) { const f = el.files?.[0]; if (f) await handleFile(f, el.dataset.lfile); return true; }
+    if (el.dataset.lfile) { if (el.files?.length) await handleFiles(el.files, el.dataset.lfile); return true; }
     const k = el.dataset.lfield; if (!k) return false;
     const item = L.item && itemById(L.item);
     if (k === 'shelf-name') {
       const s = shelfById(L.shelf); const v = el.value.trim();
       if (!v) { el.value = s.name; return true; }
       s.name = v; persist(); await sb.from('shelves').update({ name: v }).eq('id', s.id);
+    } else if (k === 'shelf-parent') {
+      const sh = shelfById(L.shelf); const parent_id = el.value || null;
+      if (parent_id === sh.id || descendants(sh.id).some((d) => d.id === parent_id)) { el.value = sh.parent_id || ''; return true; }
+      sh.parent_id = parent_id; sh.position = Math.max(-1, ...childShelves(parent_id).filter((x) => x.id !== sh.id).map((x) => x.position)) + 1;
+      persist(); render();
+      await sb.from('shelves').update({ parent_id, position: sh.position }).eq('id', sh.id);
     } else if (k === 'item-title') {
       const v = el.value.trim(); if (!v) { el.value = item.title; return true; }
       item.title = v; persist(); await sb.from('library_items').update({ title: v, updated_at: new Date().toISOString() }).eq('id', item.id);
@@ -726,8 +770,9 @@ export function createLibrary(api) {
     const fd = new FormData(e.target);
     if (id === 'shelf-form') {
       const name = String(fd.get('name') || '').trim(); if (!name) return true;
-      const position = Math.max(-1, ...L.shelves.map((s) => s.position)) + 1;
-      const { data, error } = await sb.from('shelves').insert({ name, position }).select('*').single();
+      const parent_id = L.shelf || null;
+      const position = Math.max(-1, ...childShelves(parent_id).map((s) => s.position)) + 1;
+      const { data, error } = await sb.from('shelves').insert({ name, position, parent_id }).select('*').single();
       if (!error) { L.shelves.push(data); persist(); }
       L.newShelf = false; render();
     } else if (id === 'link-form' || id === 'libnote-form') {

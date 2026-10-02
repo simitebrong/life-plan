@@ -478,3 +478,13 @@ body[data-rt] { background: var(--bg); color: var(--ink); }
 .back { display: block; }
 .rbar { background: var(--bg); backdrop-filter: none; -webkit-backdrop-filter: none; }
 .goal-title-in { field-sizing: content; min-height: 1.4em; }
+
+/* ---------- sub-shelves ---------- */
+.shelf-ic { flex: none; width: 34px; height: 30px; align-self: center; border-radius: 4px 8px 8px 8px; background: color-mix(in srgb, var(--a-move) 55%, var(--surface)); position: relative; margin-top: 6px; }
+.shelf-ic::before { content: ''; position: absolute; left: 0; top: -6px; width: 15px; height: 8px; border-radius: 4px 4px 0 0; background: inherit; }
+.goal-list.shelves + .goal-list.items { margin-top: 10px; }
+.crumbs { margin: -2px 0 6px; font-size: 13.5px; color: var(--ink-3); }
+.move-into { display: flex; flex-direction: column; gap: 5px; font-size: 14.5px; color: var(--ink-2); margin-top: 14px; }
+.goal-page .add-goal + .add-goal, .goal-page .add-goal + .step-add { margin-top: 0; }
+.goal-page .add-goal, .goal-page .step-add { margin-top: 10px; }
+.goal-page .lib-msg { margin-top: 10px; }
