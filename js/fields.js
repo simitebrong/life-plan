@@ -40,6 +40,8 @@ export const FIELDS = [
     options: [o('marital', 'Marital', 10), o('spare', 'Spare', 0)] },
   { id: 'sleepQuality', card: 'morning', area: 'sleep', label: 'Quality of sleep', type: 'choice', scale: true,
     options: [o(1, '1', 0), o(2, '2', 5), o(3, '3', 10), o(4, '4', 15), o(5, '5', 20)] },
+  { id: 'morningWood', card: 'morning', area: 'sleep', label: 'Morning wood', type: 'choice',
+    options: [o('none', 'None', 0), o('semi', 'Semi', 5), o('full', 'Full mast', 10)] },
   { id: 'morningVitamins', card: 'morning', area: 'food', label: 'Morning vitamins', type: 'choice', options: yesno(5, 0) },
 
   // Food
