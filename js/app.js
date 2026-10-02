@@ -6,6 +6,7 @@ import {
   EXERCISES, EX_GROUPS, ALL_BOX_BONUS, workoutBreakdown, workoutTarget, workoutAreasFor,
 } from './fields.js';
 import { SEED_GOALS, CATEGORIES } from './goals-seed.js';
+import { createLibrary } from './library.js';
 
 const sb = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { auth: { persistSession: true, autoRefreshToken: true } });
 const $app = document.getElementById('app');
@@ -48,6 +49,7 @@ const ctxFor = (day) => ({
   workoutTarget: workoutTarget(day, S.settings.workoutPlan),
 });
 const entry = (day = S.day) => (S.entries[day] ||= {});
+let lib = null; // created after helpers below are defined
 
 // ---------- persistence ----------
 let saveTimer = null;
@@ -86,7 +88,9 @@ async function saveSettings() {
   await sb.from('settings').upsert({ data: S.settings, updated_at: new Date().toISOString() }, { onConflict: 'user_id' });
 }
 
-async function loadAll() {
+let loadingAll = null;
+const loadAll = () => (loadingAll ||= doLoadAll().finally(() => { loadingAll = null; }));
+async function doLoadAll() {
   const [{ data: rows }, { data: st }, { data: goals }] = await Promise.all([
     sb.from('entries').select('day,data'),
     sb.from('settings').select('data').maybeSingle(),
@@ -107,6 +111,7 @@ async function loadAll() {
     S.goals = seeded || [];
   }
   store.set('lp-goals', S.goals);
+  await lib.load();
   flush();
 }
 
@@ -284,7 +289,7 @@ function yesterdayUnfinished() {
   if (!started) return false;
   const d = S.entries[y];
   if (!d) return true;
-  const n = Object.keys(d).filter((k) => !k.startsWith('_') && !['notes', 'done', 'currentDays', 'targetAchieved'].includes(k)).length;
+  const n = Object.keys(d).filter((k) => !k.startsWith('_') && !['notes', 'done', 'currentDays', 'targetAchieved', 'readSecs', 'basilReadSecs', 'workout', 'workoutScore', 'workoutTarget'].includes(k)).length;
   return !d.done && n < 20;
 }
 
@@ -464,6 +469,7 @@ function viewToday() {
       <button type="button" class="nav-arrow" data-act="day" data-n="1" ${isToday ? 'disabled' : ''} aria-label="Next day">›</button>
     </div>
     ${isToday ? `<p class="age-line">${esc(ageLine(S.day))}</p>` : ''}
+    ${isToday ? lib.todayCard() : ''}
     ${isToday && yesterdayUnfinished() ? `<button type="button" class="catchup" data-act="day" data-n="-1">Yesterday isn’t finished yet. <strong>Fill it in</strong></button>` : ''}
     <div class="score-block">
       ${ringSVG(sc)}
@@ -605,6 +611,9 @@ function viewGoalDetail(g) {
 
     <h2 class="sub">Notes</h2>
     <textarea data-gfield="notes" rows="4" placeholder="Thoughts, links, people who could help">${esc(g.notes || '')}</textarea>
+
+    <h2 class="sub">From your library</h2>
+    ${lib.goalSection(g.id)}
 
     <div class="goal-actions">
       ${achieved
@@ -767,21 +776,33 @@ function viewAuth(msg = '') {
 const TABS = [
   ['today', 'Today', '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.5"/>'],
   ['workout', 'Workout', '<path d="M6.5 6.5v11M17.5 6.5v11M3 9.5v5M21 9.5v5M6.5 12h11"/>'],
+  ['library', 'Library', '<path d="M5 4v16M9.5 4v16M14 5l4.5 14.5M3 20h18"/>'],
   ['progress', 'Progress', '<path d="M4 19V11M10 19V5M16 19v-6M22 19H2"/>'],
   ['goals', 'Goals', '<path d="M5 21V4l7 3 7-3v11l-7 3-7-3"/>'],
-  ['settings', 'Settings', '<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1 7 17M17 7l2.1-2.1"/>'],
 ];
+lib = createLibrary({
+  S, sb, store, esc, todayIso,
+  render: () => render(),
+  entryFor: (day, peek) => (peek ? S.entries[day] : (S.entries[day] ||= {})),
+  queueSave: (day) => queueSave(day),
+});
+const COG = '<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1 7 17M17 7l2.1-2.1"/>';
 
 function render() {
   if (!S.session) { $app.innerHTML = viewAuth(S.authMsg); return; }
   const y = window.scrollY;
-  const views = { today: viewToday, workout: viewWorkout, progress: viewProgress, goals: viewGoals, settings: viewSettings };
-  $app.innerHTML = `<main class="view view-${S.view}">${views[S.view]()}</main>
+  const views = { today: viewToday, workout: viewWorkout, library: () => lib.view(), progress: viewProgress, goals: viewGoals, settings: viewSettings };
+  const immersive = S.view === 'library' && lib.immersive();
+  $app.innerHTML = `<main class="view view-${S.view}${immersive ? ' immersive' : ''}">${views[S.view]()}</main>
+    ${immersive ? '' : `<button type="button" class="cog${S.view === 'settings' ? ' on' : ''}" data-act="tab" data-v="settings" aria-label="Settings">
+      <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${COG}</svg></button>
     <nav class="tabbar" aria-label="Sections">${TABS.map(([id, label, icon]) => `<button type="button" class="tab${S.view === id ? ' on' : ''}" data-act="tab" data-v="${id}" aria-current="${S.view === id ? 'page' : 'false'}">
-      <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${icon}</svg><span>${label}</span></button>`).join('')}</nav>
+      <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${icon}</svg><span>${label}</span></button>`).join('')}</nav>`}
     ${S.sheet ? sheetHTML() : ''}${S.celebrate ? celebrateSheet() : ''}`;
   window.scrollTo(0, y);
   setSaveState(S.saveState);
+  if (immersive) document.body.dataset.rt = store.get('lp-reader', {}).theme || 'auto'; else delete document.body.dataset.rt;
+  lib.afterRender();
 }
 
 function sheetHTML() {
@@ -802,6 +823,7 @@ $app.addEventListener('click', async (e) => {
   const el = e.target.closest('[data-act]');
   if (!el) return;
   const act = el.dataset.act;
+  if (await lib.onClick(act, el)) return;
   const fid = el.dataset.f;
   const d = entry();
   switch (act) {
@@ -856,7 +878,7 @@ $app.addEventListener('click', async (e) => {
       break;
     }
     case 'wsession': S.wSession = el.dataset.v; render(); break;
-    case 'tab': S.view = el.dataset.v; S.openPriority = null; S.goalOpen = null; S.goalNew = false; S.confirmDelete = null; if (S.view === 'workout') S.wSession = null; render(); window.scrollTo(0, 0); break;
+    case 'tab': S.view = el.dataset.v; lib.reset(); S.openPriority = null; S.goalOpen = null; S.goalNew = false; S.confirmDelete = null; if (S.view === 'workout') S.wSession = null; render(); window.scrollTo(0, 0); break;
     case 'goaltab': S.goalTab = el.dataset.v; S.openPriority = null; render(); break;
     case 'goal-new': S.goalNew = true; S.newPrio = 3; render(); window.scrollTo(0, 0); document.querySelector('#goal-form input[name=title]')?.focus(); break;
     case 'goal-close': S.goalNew = false; S.goalOpen = null; S.confirmDelete = null; render(); window.scrollTo(0, 0); break;
@@ -953,6 +975,7 @@ $app.addEventListener('click', async (e) => {
 
 $app.addEventListener('change', async (e) => {
   const el = e.target;
+  if (await lib.onChange(el)) return;
   if (el.matches('.date-pick')) { if (el.value && el.value <= todayIso()) { S.day = el.value; render(); } return; }
   if (el.dataset.gfield) {
     const g = S.goals.find((x) => x.id === S.goalOpen);
@@ -1005,6 +1028,7 @@ $app.addEventListener('input', (e) => {
 });
 
 $app.addEventListener('submit', async (e) => {
+  if (await lib.onSubmit(e)) return;
   if (e.target.id === 'goal-form') {
     e.preventDefault();
     const fd = new FormData(e.target);
