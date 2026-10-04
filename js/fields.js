@@ -93,6 +93,8 @@ export const FIELDS = [
   // Tracked as a factor for insights; never scored.
   { id: 'cage', card: 'rel', area: null, label: 'Cage', type: 'choice', options: yesno(0, 0) },
   { id: 'stretcher', card: 'rel', area: 'rel', label: 'Stretcher', type: 'choice', options: yesno(5, 0) },
+  { id: 'staminaTraining', card: 'rel', area: 'rel', label: 'Stamina training', type: 'choice',
+    options: [o('none', 'None', 0), o('brief', 'Brief', 5), o('successful', 'Successful', 20), o('ruin', 'Accidental ruin', 0)] },
   { id: 'currentDays', card: 'rel', area: 'rel', label: 'Current days', type: 'auto',
     bands: [[8, 0], [15, 5], [22, 10], [29, 15], [Infinity, 20]] },
   { id: 'service', card: 'rel', area: 'rel', label: 'Service', type: 'choice',
