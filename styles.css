@@ -502,3 +502,7 @@ body[data-rt] { background: var(--bg); color: var(--ink); }
 .guide-actions { justify-content: center; padding-top: 10px; }
 .as-btn { display: inline-grid; place-items: center; text-decoration: none; color: var(--ink); font-weight: 700; }
 .doc-link { color: var(--primary); font-weight: 700; }
+
+/* Long option rows wrap onto a second line instead of running off the card */
+.opts:not(.scale) { flex-wrap: wrap; }
+.opts:not(.wrap):not(.scale) .opt { flex: 1 1 auto; }

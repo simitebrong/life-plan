@@ -43,6 +43,8 @@ export const FIELDS = [
   // Recorded for insight only; never scored.
   { id: 'nightTerrors', card: 'morning', area: null, label: 'Night terrors', type: 'choice',
     options: ['none', 'minor', 'manageable', 'difficult'].map((v) => o(v, v[0].toUpperCase() + v.slice(1))) },
+  { id: 'snoring', card: 'morning', area: 'sleep', label: 'Snoring', type: 'choice',
+    options: [o('unknown', 'Unknown', 0), o('notNoticed', 'Not noticed', 20), o('tolerable', 'Tolerable', 10), o('unbearable', 'Unbearable', 0)] },
   { id: 'morningWood', card: 'morning', area: 'sleep', label: 'Morning wood', type: 'choice',
     options: [o('none', 'None', 0), o('semi', 'Semi', 5), o('full', 'Full mast', 10)] },
   { id: 'morningVitamins', card: 'morning', area: 'food', label: 'Morning vitamins', type: 'choice', options: yesno(5, 0) },
