@@ -117,18 +117,17 @@ export const FIELDS = [
   { id: 'clothes', card: 'mind', area: 'mind', label: 'Clothes & grooming', type: 'choice',
     options: [o('none', 'None', 0), o('basic', 'Basic', 2), o('average', 'Average', 5), o('sharp', 'Sharp', 10)] },
   { id: 'driving', card: 'mind', area: 'mind', label: 'Driving', type: 'choice', options: [o('yes', 'Yes', 50, { star: true }), o('no', 'No', 0)] },
-  // Recorded for insight only; never scored.
-  { id: 'motivation', card: 'mind', area: null, label: 'Motivation', type: 'choice', scale: true, low: 'none', high: 'high',
-    options: [0, 1, 2, 3, 4, 5].map((n) => o(n, String(n))) },
-  { id: 'anxiety', card: 'mind', area: null, label: 'Anxiety', type: 'choice', scale: true, low: 'calm', high: 'high',
-    options: [0, 1, 2, 3, 4, 5].map((n) => o(n, String(n))) },
 
   // How I felt (unscored)
   { id: 'stress', card: 'wellbeing', area: null, label: 'Stress level', type: 'choice', scale: true, low: 'calm', high: 'high',
     options: [0, 1, 2, 3, 4, 5].map((n) => o(n, String(n))) },
+  { id: 'anxiety', card: 'wellbeing', area: null, label: 'Anxiety', type: 'choice', scale: true, low: 'calm', high: 'high',
+    options: [0, 1, 2, 3, 4, 5].map((n) => o(n, String(n))) },
   { id: 'ptsd', card: 'wellbeing', area: null, label: 'PTSD triggers', type: 'choice',
     options: ['none', 'low', 'medium', 'severe'].map((v) => o(v, v[0].toUpperCase() + v.slice(1))) },
   { id: 'selfEsteem', card: 'wellbeing', area: null, label: 'Self esteem', type: 'choice', scale: true, low: 'low', high: 'high',
+    options: [0, 1, 2, 3, 4, 5].map((n) => o(n, String(n))) },
+  { id: 'motivation', card: 'wellbeing', area: null, label: 'Motivation', type: 'choice', scale: true, low: 'none', high: 'high',
     options: [0, 1, 2, 3, 4, 5].map((n) => o(n, String(n))) },
   { id: 'palpitations', card: 'wellbeing', area: null, label: 'Heart palpitations', type: 'choice',
     options: ['none', 'minor', 'medium', 'severe'].map((v) => o(v, v[0].toUpperCase() + v.slice(1))) },
@@ -328,6 +327,8 @@ export function wellbeingReading(d) {
   const parts = [];
   if (answered(d.stress)) parts.push(1 - d.stress / 5);
   if (answered(d.selfEsteem)) parts.push(d.selfEsteem / 5);
+  if (answered(d.anxiety)) parts.push(1 - d.anxiety / 5);
+  if (answered(d.motivation)) parts.push(d.motivation / 5);
   const sev = { none: 1, low: 0.66, minor: 0.66, medium: 0.33, severe: 0 };
   if (answered(d.ptsd)) parts.push(sev[d.ptsd]);
   if (answered(d.palpitations)) parts.push(sev[d.palpitations]);
