@@ -117,6 +117,11 @@ export const FIELDS = [
   { id: 'clothes', card: 'mind', area: 'mind', label: 'Clothes & grooming', type: 'choice',
     options: [o('none', 'None', 0), o('basic', 'Basic', 2), o('average', 'Average', 5), o('sharp', 'Sharp', 10)] },
   { id: 'driving', card: 'mind', area: 'mind', label: 'Driving', type: 'choice', options: [o('yes', 'Yes', 50, { star: true }), o('no', 'No', 0)] },
+  // Recorded for insight only; never scored.
+  { id: 'motivation', card: 'mind', area: null, label: 'Motivation', type: 'choice', scale: true, low: 'none', high: 'high',
+    options: [0, 1, 2, 3, 4, 5].map((n) => o(n, String(n))) },
+  { id: 'anxiety', card: 'mind', area: null, label: 'Anxiety', type: 'choice', scale: true, low: 'calm', high: 'high',
+    options: [0, 1, 2, 3, 4, 5].map((n) => o(n, String(n))) },
 
   // How I felt (unscored)
   { id: 'stress', card: 'wellbeing', area: null, label: 'Stress level', type: 'choice', scale: true, low: 'calm', high: 'high',
