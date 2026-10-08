@@ -4,8 +4,8 @@ import webpush from "npm:web-push@3.6.7";
 // The same analysis code the app's Progress screen runs, pinned to a commit of this repo and
 // bundled at deploy time, so the review's numbers match the charts. After changing js/analysis.js
 // or js/fields.js: push, update the commit below, redeploy.
-import { weeklySummary, weekStart, addDays } from "https://esm.sh/gh/simitebrong/life-plan@1f968683c9011e29f88b67391d249b5ccfc8a1a2/js/analysis.js";
-import { FIELDS } from "https://esm.sh/gh/simitebrong/life-plan@1f968683c9011e29f88b67391d249b5ccfc8a1a2/js/fields.js";
+import { weeklySummary, weekStart, addDays } from "https://esm.sh/gh/simitebrong/life-plan@0f602186a9dbb354f05040f4d665cc5b142a3ab0/js/analysis.js";
+import { FIELDS } from "https://esm.sh/gh/simitebrong/life-plan@0f602186a9dbb354f05040f4d665cc5b142a3ab0/js/fields.js";
 
 // Life Plan weekly review.
 // Cron mode (x-cron-secret): every 15 min on Sundays; writes the review at the user's chosen time and sends a push.
@@ -42,6 +42,7 @@ const GLOSSARY = FIELDS.map((f: any) => {
 workout: home workout reps by session {morning:{exercise:reps}, midday:{...}, cardio:{mins,km}}; workoutScore = points; workoutTarget = that day's target
 readSecs / basilReadSecs: seconds spent reading in the app's library (Basil = his own stories)
 done: he tapped "Finish my day"
+workOff: true = not a working day (weekend or holiday), so the Work fields are intentionally blank, not missed
 Times: firstDrink/lastDrink/bedTime are evening times (before noon = after midnight). Morning fields (outOfBed, sleepQuality, nightTerrors, snoring, morningWood, whichBed) describe the night before.`;
 
 const INSTRUCTIONS = `You write Simon's weekly review for his personal Life Plan app.
@@ -54,13 +55,13 @@ You receive JSON with the week's computed stats, the previous week (if any), hab
 
 Write:
 - headline: max 90 characters, celebrating the most genuinely impressive concrete thing this week.
-- summary: 3-4 sentences giving the shape of the week with specific numbers (score, drinks against target, workouts, sleep, how he felt). Acknowledge hard moments from his notes kindly if relevant.
+- summary: 3-4 sentences giving the shape of the week with specific numbers (score, drinks against target, workouts, sleep, work, how he felt). Acknowledge hard moments from his notes kindly if relevant.
 - wins: 3-5 specific wins, each one short sentence with a number or a day where possible.
 - patterns: 2-4 possible links worth watching. Draw on the screened list and your own careful reading of the daily data (including next-day effects, e.g. drinks or bed time and the next morning's sleep). Phrase each as a possibility ("seems to", "might"), include the sample (e.g. "4 v 3 days"), never claim cause. Set confidence to exactly one of: "Early hint", "Emerging pattern", "Consistent pattern" (with under two weeks of data, everything is "Early hint").
 - focus: ONE small, concrete, achievable action for the coming week, tied to something in the data, phrased as an invitation.
 - look_ahead: 1-2 sentences on what's coming: if the drinks target steps down within 14 days, name the date and the new number and frame it as the next step he's ready for; mention the workout target; end with encouragement.
 
-Rules: use only numbers that are in the data; if few days were logged, say so lightly and keep claims modest. Relationship, intimacy, PTSD, night terrors, palpitations and similar are tracked for insight: mention them matter-of-factly and kindly only where useful, never moralise, never diagnose. Don't mention "the app", JSON, fields or scoring mechanics by their code names.`;
+Rules: use only numbers that are in the data; if few days were logged, say so lightly and keep claims modest. Relationship, intimacy, PTSD, night terrors, palpitations and similar are tracked for insight: mention them matter-of-factly and kindly only where useful, never moralise, never diagnose. Work is unscored because much of it is outside his control: reflect it with empathy (intensity, feeling, hours, whether he took a post-work splash down) and look for links between work and drinks, sleep and mood; a day marked as not a working day is never missing data. Don't mention "the app", JSON, fields or scoring mechanics by their code names.`;
 
 const SCHEMA = {
   type: "object", additionalProperties: false,
