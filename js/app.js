@@ -266,12 +266,19 @@ function cardHTML(card, d, sc) {
   if (card.id === 'drinks') extra = drinksFooter();
   if (card.id === 'wellbeing') { const w = wellbeingReading(d); if (w != null) extra = `<p class="micro">Wellbeing reading today: <strong>${w}</strong>. This never affects your score.</p>`; }
   const areaScore = card.area && card.id !== 'night' ? sc.areas[card.area] : null;
-  return `<section class="card" id="card-${card.id}" style="--accent:${card.area ? AREAS[card.area].color : 'var(--ink-3)'}">
+  const off = card.offToggle && d.workOff;
+  // Work days only: a day off is a complete answer, not missing data
+  const toggle = card.offToggle ? `<button type="button" class="off-toggle${off ? ' on' : ''}" data-act="workoff" aria-pressed="${!!off}">
+      <span class="switch" aria-hidden="true"></span><span class="off-txt">Not a working day<small>Weekend or holiday</small></span></button>` : '';
+  const accent = card.area ? AREAS[card.area].color : card.id === 'work' ? 'var(--a-work)' : 'var(--ink-3)';
+  return `<section class="card${off ? ' is-off' : ''}" id="card-${card.id}" style="--accent:${accent}">
     <header class="card-head">
       <h2>${esc(card.title)}</h2>
-      <span class="card-meta">${card.id === 'notes' ? '' : `${done}/${fields.length}`}${areaScore != null ? ` <span class="area-pill">${areaScore}</span>` : ''}</span>
+      <span class="card-meta">${card.id === 'notes' ? '' : off ? 'Day off ✓' : `${done}/${fields.length}`}${areaScore != null ? ` <span class="area-pill">${areaScore}</span>` : ''}</span>
     </header>
     ${card.hint ? `<p class="card-hint">${esc(card.hint)}</p>` : ''}
+    ${toggle}
+    ${off ? `<p class="off-note">Nothing to log today. Enjoy the time off.</p>` : ''}
     ${body}${extra}
   </section>`;
 }
@@ -468,7 +475,7 @@ function viewToday() {
     const fs = visibleFields(c.id, d);
     const n = fs.filter((f) => isAnswered(f, d)).length;
     const full = c.id !== 'notes' && n === fs.length;
-    return `<a href="#card-${c.id}" class="chip${full ? ' full' : ''}" style="--accent:${c.area ? AREAS[c.area].color : 'var(--ink-3)'}">${esc(c.title)}</a>`;
+    return `<a href="#card-${c.id}" class="chip${full ? ' full' : ''}" style="--accent:${c.area ? AREAS[c.area].color : c.id === 'work' ? 'var(--a-work)' : 'var(--ink-3)'}">${esc(c.title)}</a>`;
   }).join('');
   return `
   <header class="today-top">
@@ -866,6 +873,12 @@ $app.addEventListener('click', async (e) => {
       break;
     }
     case 'sheet-close': S.sheet = null; render(); break;
+    case 'workoff': {
+      if (d.workOff) delete d.workOff; else d.workOff = true;
+      queueSave(S.day); render();
+      if (navigator.vibrate) navigator.vibrate(8);
+      break;
+    }
     case 'ex': {
       const id = el.dataset.id; const n = Number(el.dataset.n); const s = S.wSession || defaultSession();
       setWorkout((w) => { w[s] ||= {}; w[s][id] = Math.max(0, (w[s][id] || 0) + n); });

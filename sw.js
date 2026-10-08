@@ -1,5 +1,5 @@
 // Life Plan service worker: offline shell + push reminders
-const CACHE = 'life-plan-v18';
+const CACHE = 'life-plan-v19';
 const SHELL = ['/', '/index.html', '/styles.css', '/js/app.js', '/js/fields.js', '/js/config.js', '/js/goals-seed.js', '/js/library.js', '/js/analysis.js', '/js/charts.js', '/js/progress.js',
   '/manifest.webmanifest', '/icons/icon-192.png'];
 

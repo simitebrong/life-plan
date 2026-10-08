@@ -51,7 +51,7 @@ function fieldMetric(f) {
   const base = { id: f.id, label: f.label, card: f.card, group: CARDS.find((c) => c.id === f.card)?.title, night: f.card === 'morning', src: [f.id], field: f };
   if (f.type === 'time') {
     const evening = !!f.evening;
-    return { ...base, kind: 'num', unit: 'time', fmt: fmtTime, better: f.id === 'firstDrink' ? 1 : -1,
+    return { ...base, kind: 'num', unit: 'time', fmt: fmtTime, better: f.better ?? (f.id === 'firstDrink' ? 1 : -1),
       get: (e) => timeToMins(e[f.id], evening), chart: 'line' };
   }
   if (f.type === 'count') return { ...base, kind: 'num', fmt: fmtNum(1), better: -1, get: (e) => (typeof e[f.id] === 'number' ? e[f.id] : null), chart: 'bar', zero: true };
@@ -59,17 +59,18 @@ function fieldMetric(f) {
   if (f.type === 'auto') return { ...base, kind: 'num', fmt: fmtNum(0), better: 0, get: (e) => (answered(e.release) && typeof e[f.id] === 'number' ? e[f.id] : null), chart: 'line', src: ['currentDays', 'release'] };
   if (f.type === 'choice' && f.scale) {
     const vals = f.options.map((o) => o.v);
-    const better = ['stress', 'anxiety', 'eczema'].includes(f.id) ? -1 : 1;
+    const better = f.better ?? (['stress', 'anxiety', 'eczema'].includes(f.id) ? -1 : 1);
     return { ...base, kind: 'num', scale: true, domain: [Math.min(...vals), Math.max(...vals)], fmt: fmtNum(1), better,
       get: (e) => (typeof e[f.id] === 'number' ? e[f.id] : null), chart: 'line' };
   }
   if (f.type === 'choice') {
-    const ordinal = f.options.every((o) => o.v in SEVERITY) && f.options.some((o) => o.v === 'none');
-    const levels = f.options.map((o, i) => ({ v: o.v, label: o.label, rank: ordinal ? SEVERITY[o.v] : i, pts: o.pts }));
-    return { ...base, kind: 'cat', ordinal, levels, better: ordinal && !f.area ? -1 : 0,
+    const severity = f.options.every((o) => o.v in SEVERITY) && f.options.some((o) => o.v === 'none');
+    const ordinal = severity || !!f.ranked; // ranked: options listed worst to best
+    const levels = f.options.map((o, i) => ({ v: o.v, label: o.label, rank: severity ? SEVERITY[o.v] : i, pts: o.pts }));
+    return { ...base, kind: 'cat', ordinal, levels, better: f.ranked ? 1 : severity && !f.area ? -1 : 0,
       get: (e) => (answered(e[f.id]) ? e[f.id] : null),
       // numeric reading so cat fields can be outcomes too: severity for symptoms, points for scored choices
-      num: ordinal ? (e) => (answered(e[f.id]) ? SEVERITY[e[f.id]] ?? null : null) : null };
+      num: ordinal ? (e) => (answered(e[f.id]) ? levels.find((l) => l.v === e[f.id])?.rank ?? null : null) : null };
   }
   if (f.type === 'multi') {
     const levels = f.options.filter((o) => !o.exclusive).map((o) => ({ v: o.v, label: o.label }));
@@ -110,6 +111,15 @@ export function buildMetrics() {
   add({ id: 'readMins', label: 'Reading minutes', group: 'Mind & growth', kind: 'num', unit: 'min', fmt: fmtNum(0), better: 1, chart: 'bar', zero: true,
     src: ['readSecs'], get: (e) => (e.readSecs ? e.readSecs / 60 : e.done ? 0 : null) });
   for (const f of FIELDS) { const x = fieldMetric(f); if (x) add(x); }
+  // Work: a working-day flag (the toggle) and hours between logging on and closing the laptop
+  add({ id: 'workDay', label: 'Working day', group: 'Work', card: 'work', kind: 'cat', src: ['workOff', 'workStart', 'workEnd', 'workIntensity', 'workFeeling', 'splashDown'],
+    levels: [{ v: 'yes', label: 'Working day', rank: 0 }, { v: 'no', label: 'Day off', rank: 1 }], better: 0, factorShort: 'it was a working day',
+    get: (e) => (e.workOff ? 'no' : ['workStart', 'workEnd', 'workIntensity', 'workFeeling', 'splashDown'].some((k) => answered(e[k])) ? 'yes' : null) });
+  add({ id: 'workHours', label: 'Working hours', group: 'Work', card: 'work', kind: 'num', unit: 'h', fmt: fmtHours, better: 0, chart: 'bar', zero: true,
+    src: ['workStart', 'workEnd'], get: (e) => {
+      if (e.workOff) return null; const a = timeToMins(e.workStart); let b = timeToMins(e.workEnd);
+      if (a == null || b == null) return null; if (b < a) b += 1440; const h = (b - a) / 60; return h > 0 && h <= 18 ? h : null;
+    } });
   // Drinks count keeps its familiar name and gets a target line
   const dc = m.find((x) => x.id === 'drinkCount'); dc.target = (day, ctx) => ctx(day).target; dc.src = ['drinkCount', 'targetAchieved'];
   m.find((x) => x.id === 'targetAchieved').src = ['drinkCount', 'targetAchieved'];
@@ -225,7 +235,7 @@ export const HABITS = [
   ['targetAchieved', 'Drinks on target'], ['loAlarm', 'Last-orders alarm'], ['dinner', 'Healthy dinner'],
   ['eveningTreats', 'No evening treats'], ['bedTime', 'Bed by 22:30'], ['outOfBed', 'Up by 06:30'],
   ['duolingo', 'Duolingo'], ['visualisation', 'Visualisation'], ['goals', 'Goal progress'], ['fcProject', 'FC project'],
-  ['basil', 'Basil'], ['social', 'Social'], ['fun', 'Fun & hobbies'], ['stretcher', 'Stretcher'], ['decMH', 'Positive mental-health choice'],
+  ['basil', 'Basil'], ['splashDown', 'Post-work splash down'], ['social', 'Social'], ['fun', 'Fun & hobbies'], ['stretcher', 'Stretcher'], ['decMH', 'Positive mental-health choice'],
 ];
 export function habitDone(id, e, day, ctx) {
   if (!e) return null;
@@ -234,6 +244,7 @@ export function habitDone(id, e, day, ctx) {
   if (id === 'outOfBed') { const m = timeToMins(e.outOfBed); return m == null ? null : m <= 390; }
   if (id === 'eveningTreats') return answered(e.eveningTreats) ? e.eveningTreats === 'none' : null;
   if (id === 'dinner') return answered(e.dinner) ? e.dinner === 'healthy' : null;
+  if (id === 'splashDown') return e.workOff || !answered(e.splashDown) ? null : e.splashDown === 'yes';
   const f = FIELD[id]; const v = e[id];
   if (!answered(v)) return null;
   if (f.type === 'multi') return v.some((x) => !f.options.find((o) => o.v === x)?.exclusive);
@@ -250,9 +261,9 @@ export function habitGrid(days, entries, settings, ctx = makeCtx(settings)) {
 // ---------- patterns ----------
 // Compares an outcome on days with vs without a factor (same day, or the day after).
 // With little data these are possibilities, not conclusions; the strength label says so.
-const OUTCOMES = ['sleepQuality', 'hoursInBed', 'nightTerrors', 'morningWood', 'outOfBed', 'stress', 'anxiety', 'motivation', 'selfEsteem',
+const OUTCOMES = ['workIntensity', 'workFeeling', 'workHours', 'sleepQuality', 'hoursInBed', 'nightTerrors', 'morningWood', 'outOfBed', 'stress', 'anxiety', 'motivation', 'selfEsteem',
   'wellbeing', 'palpitations', 'ptsd', 'eczema', 'drinkCount', 'firstDrink', 'lastDrink', 'spend', 'workoutScore', 'bedTime', 'intimacy', 'score'];
-const RELATED = [['drinkCount', 'targetAchieved', 'spend'], ['homeWorkout', 'workoutScore', 'morningWorkout', 'middayWorkout'], ['release', 'currentDays'],
+const RELATED = [['workStart', 'workHours'], ['workEnd', 'workHours'], ['drinkCount', 'targetAchieved', 'spend'], ['homeWorkout', 'workoutScore', 'morningWorkout', 'middayWorkout'], ['release', 'currentDays'],
   ['bedTime', 'hoursInBed'], ['outOfBed', 'hoursInBed'], ['firstDrink', 'drinkHours'], ['lastDrink', 'drinkHours']];
 const SKIP_FACTORS = new Set(['notes', 'currentDays', 'homeWorkout', 'workoutPct', 'saved', 'wellbeing', 'drinksVsTarget', 'readMins', 'targetAchieved']);
 // lower-case a label for use mid-sentence, but leave acronyms (PTSD, FC) alone
@@ -268,11 +279,14 @@ const FAM = {
   felt: ['stress', 'anxiety', 'motivation', 'selfEsteem', 'ptsd', 'palpitations'],
   rel: ['intimacy', 'release', 'cage', 'stretcher', 'staminaTraining', 'service', 'bedWithJen'],
   mind: ['social', 'fun', 'visualisation', 'goals', 'duolingo', 'fcProject', 'basil', 'decMH', 'clothes', 'driving'],
+  work: ['workDay', 'workStart', 'workEnd', 'workHours', 'workIntensity', 'workFeeling', 'splashDown'],
   food: ['dinner', 'eveningTreats', 'snacks', 'breakfast', 'lunch', 'morningVitamins', 'eveningVitamins'],
 };
 const MOOD = ['stress', 'anxiety', 'motivation', 'selfEsteem', 'wellbeing'];
 const SLEEP_OUT = ['sleepQuality', 'hoursInBed', 'nightTerrors', 'morningWood', 'outOfBed'];
 const KEY = [
+  [FAM.work, [...MOOD, 'drinkCount', 'firstDrink', 'lastDrink', 'spend', 'sleepQuality', 'hoursInBed', 'nightTerrors', 'bedTime', 'workoutScore', 'palpitations', 'eczema', 'score']],
+  [[...FAM.sleep, ...FAM.drinks, ...FAM.move, 'stress', 'anxiety', 'motivation'], ['workIntensity', 'workFeeling', 'workHours']],
   [FAM.drinks, [...SLEEP_OUT, ...MOOD, 'palpitations', 'eczema', 'workoutScore', 'score']],
   [FAM.sleep, [...MOOD, 'drinkCount', 'firstDrink', 'workoutScore', 'score', 'palpitations']],
   [FAM.evening, SLEEP_OUT],
@@ -333,7 +347,7 @@ export function buildFactors(days, entries, ctx) {
       }
       const opts = lv.length === 2 ? [lv[0]] : lv;
       for (const o of opts) {
-        factors.push({ id: `${m.id}=${o.v}`, metric: m.id, src: m.src, night, label: `${m.label}: ${o.label}`, short: `${lc(m.label)} was “${o.label.toLowerCase()}”`,
+        factors.push({ id: `${m.id}=${o.v}`, metric: m.id, src: m.src, night, label: `${m.label}: ${o.label}`, short: m.factorShort || `${lc(m.label)} was “${o.label.toLowerCase()}”`,
           vals: Object.fromEntries(logged.map((d) => [d, vals[d] == null ? null : vals[d] === o.v])) });
       }
       continue;
@@ -485,7 +499,7 @@ export function nextDrinkStep(day, settings) {
   return next ? { from: next.from, target: next.target, daysAway: dayDiff(day, next.from) } : null;
 }
 
-const KEEP_RAW = FIELDS.map((f) => f.id).concat(['workoutScore', 'readSecs', 'basilReadSecs', 'done', 'workout']);
+const KEEP_RAW = FIELDS.map((f) => f.id).concat(['workOff', 'workoutScore', 'readSecs', 'basilReadSecs', 'done', 'workout']);
 export function weeklySummary(entries, settings, wkStart, extra = {}) {
   const ctx = makeCtx(settings);
   const days = daysBetween(wkStart, addDays(wkStart, 6));

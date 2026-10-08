@@ -63,7 +63,7 @@ export function createProgress(api) {
       day: p.week ? null : p.day,
     });
     if (m.kind === 'cat') {
-      return lineChart({ pts, W: w, H: opts.H || 170, domain: [0, 3], fmt: (v) => sevLabel(m, v), tickFmt: (v) => sevLabel(m, v), color: opts.color, tip, open: true, label: m.label });
+      return lineChart({ pts, W: w, H: opts.H || 170, domain: [0, Math.max(...m.levels.map((l) => l.rank))], fmt: (v) => sevLabel(m, v), tickFmt: (v) => sevLabel(m, v), color: opts.color, tip, open: true, label: m.label });
     }
     if (asBars) {
       return barChart({ pts, W: w, H: opts.H || 180, fmt: (v) => fmtV(m, v), tickFmt: m.unit === 'time' ? fmtTime : (v) => (m.unit === '£' ? `£${v}` : String(v)),
@@ -163,6 +163,26 @@ export function createProgress(api) {
         tip: (p) => ({ title: longDate(p.day), rows: [[m.label, p.v == null ? 'not logged' : levels.find((l) => l.v === p.v)?.label]], day: p.day }) })}</div>`;
     };
 
+    // Work (unscored): only shown once there's something in range
+    const workBlock = () => {
+      const wd = ds.map((d) => valueOf(M.workDay, S.entries, d, c));
+      if (!wd.some((v) => v != null)) return '';
+      const on = wd.filter((v) => v === 'yes').length; const off = wd.filter((v) => v === 'no').length;
+      const avg = (id) => { const v = ds.map((d) => numOf(M[id], S.entries, d, c)).filter((x) => x != null); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null; };
+      const tileFor = (id, label, val, dom) => `<div class="mini"><div class="mini-h"><span>${label}</span><b>${val}</b></div>
+        ${miniLine({ pts: pointsFor(M[id], ds, c, false), W: halfW(), domain: dom, time: M[id].unit === 'time', color: 'var(--a-work)', fmt: (x) => fmtV(M[id], x), open: true,
+          tip: (p) => ({ title: longDate(p.day), rows: [[label, fmtV(M[id], p.v)]], day: p.day }) })}</div>`;
+      return `<h2 class="sub">Work</h2>
+        <div class="mini-grid">
+          ${tileFor('workHours', 'Hours', fmtHours(avg('workHours')))}
+          ${tileFor('workIntensity', 'Intensity', avg('workIntensity') == null ? '–' : round(avg('workIntensity'), 1), [1, 5])}
+          ${tileFor('workStart', 'Logged on', fmtTime(avg('workStart')))}
+          ${tileFor('workEnd', 'Laptop shut', fmtTime(avg('workEnd')))}
+        </div>
+        <div class="panel slim">${strip('workFeeling', 'var(--a-work)')}${strip('splashDown', 'var(--a-work)')}${strip('workDay', 'var(--a-work)')}</div>
+        <p class="fine">${on} working day${on === 1 ? '' : 's'}${off ? ` and ${off} day${off === 1 ? '' : 's'} off` : ''} in this range. Work is recorded for insight and never scored.</p>`;
+    };
+
     // Habits
     const hab = habitGrid(ds, S.entries, S.settings, c).sort((a, b) => b.hits / b.of - a.hits / a.of);
 
@@ -191,6 +211,8 @@ export function createProgress(api) {
 
       <section class="panel"><div class="panel-h"><h2>Home workout</h2><span class="hint">${st.workout.days} active day${st.workout.days === 1 ? '' : 's'}</span></div>${wChart}
         <p class="clegend-note">Dashed line shows each day's target, which climbs as you get stronger.</p></section>
+
+      ${workBlock()}
 
       <h2 class="sub">Sleep</h2>
       <div class="mini-grid">${multi(['sleepQuality', 'hoursInBed', 'outOfBed', 'bedTime'], 'var(--a-sleep)')}</div>
@@ -274,7 +296,7 @@ export function createProgress(api) {
     return head + list.map((p, i) => {
       const O = METRIC[p.outcome];
       const fmt = O.kind === 'cat' ? (v) => sevLabel(O, v) || round(v, 1) : (v) => fmtV(O, v);
-      const dom = O.domain && O.kind !== 'cat' ? O.domain : O.kind === 'cat' ? [0, 3] : null;
+      const dom = O.domain && O.kind !== 'cat' ? O.domain : O.kind === 'cat' ? [0, Math.max(...O.levels.map((l) => l.rank))] : null;
       return `<article class="pat">
         <div class="pat-top"><span class="badge ${p.strength.id}">${p.strength.label}</span><span class="pat-basis">${esc(p.basis)}</span></div>
         <p>${esc(p.text)}</p>

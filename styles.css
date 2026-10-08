@@ -16,6 +16,7 @@
   --a-drinks: #93528A;
   --a-rel: #BC5468;
   --a-mind: #23897C;
+  --a-work: #5C6F82;
   --radius: 18px;
   --display: 'Bricolage Grotesque', system-ui, sans-serif;
   --body: 'Figtree', system-ui, sans-serif;
@@ -40,6 +41,7 @@
     --a-drinks: #C186B8;
     --a-rel: #E07C8F;
     --a-mind: #4EBBAC;
+    --a-work: #9AAFC4;
     color-scheme: dark;
   }
 }
@@ -664,3 +666,17 @@ button.link.inline { padding: 0; font-size: inherit; }
   .rchip { padding: 4px 9px; font-size: 13.5px; }
   .rep-stats { grid-template-columns: repeat(2, 1fr); }
 }
+
+/* ---------- Work: not-a-working-day toggle ---------- */
+.off-toggle {
+  display: flex; align-items: center; gap: 10px; width: 100%; margin: 10px 0 4px; padding: 10px 12px; min-height: 48px;
+  border: 0; border-radius: 12px; background: var(--opt-bg); color: var(--ink); font-weight: 700; font-size: 15.5px; text-align: left;
+}
+.off-txt { display: flex; flex-direction: column; line-height: 1.25; }
+.off-toggle small { font-weight: 500; color: var(--ink-3); font-size: 13px; }
+.off-toggle .switch { position: relative; width: 40px; height: 24px; border-radius: 12px; background: var(--line); flex: none; transition: background-color 0.15s; }
+.off-toggle .switch::after { content: ''; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: var(--surface); box-shadow: 0 1px 2px rgb(0 0 0 / 0.2); transition: transform 0.15s; }
+.off-toggle.on .switch { background: var(--accent); }
+.off-toggle.on .switch::after { transform: translateX(16px); }
+.off-note { color: var(--ink-2); font-size: 15px; margin: 6px 0 12px; }
+.card.is-off { padding-bottom: 4px; }

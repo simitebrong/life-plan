@@ -16,6 +16,7 @@ export const CARDS = [
   { id: 'morning', title: 'Morning', area: 'sleep', hint: 'How the night went' },
   { id: 'food', title: 'Food', area: 'food' },
   { id: 'move', title: 'Movement', area: 'move' },
+  { id: 'work', title: 'Work', area: null, hint: 'Recorded for insight, never scored', offToggle: true },
   { id: 'drinks', title: 'Drinks', area: 'drinks' },
   { id: 'rel', title: 'Relationship', area: 'rel' },
   { id: 'mind', title: 'Mind & growth', area: 'mind' },
@@ -73,6 +74,15 @@ export const FIELDS = [
   { id: 'otherActivity', card: 'move', area: 'move', label: 'Other activity', type: 'multi',
     options: [o('none', 'None', 0, { exclusive: true }), o('walk', 'Walk', 2), o('play', 'Play', 2), o('sport', 'Sport', 5),
       o('dance', 'Dance', 2), o('swim', 'Swim', 50, { star: true })] },
+
+  // Work (unscored; skipped on days marked "Not a working day")
+  { id: 'workStart', card: 'work', area: null, label: 'Logged on', type: 'time', defaultTime: '08:30', better: 0 },
+  { id: 'workIntensity', card: 'work', area: null, label: 'Intensity', type: 'choice', scale: true, low: 'light', high: 'intense', better: 0,
+    options: [1, 2, 3, 4, 5].map((n) => o(n, String(n))) },
+  { id: 'workFeeling', card: 'work', area: null, label: 'Feeling', type: 'choice', ranked: true,
+    options: [o('negative', 'Negative'), o('neutral', 'Neutral'), o('positive', 'Positive')] },
+  { id: 'workEnd', card: 'work', area: null, label: 'Closed the laptop', type: 'time', defaultTime: '17:30', better: 0 },
+  { id: 'splashDown', card: 'work', area: null, label: 'Post-work splash down', type: 'choice', options: yesno(0, 0) },
 
   // Drinks
   { id: 'drinkCount', card: 'drinks', area: 'drinks', label: 'Number of drinks', type: 'count' },
@@ -346,6 +356,7 @@ export function isAnswered(f, data) {
 }
 
 export function visibleFields(cardId, data) {
+  if (cardId === 'work' && data.workOff) return [];
   const dry = data.drinkCount === 0;
   return FIELDS.filter((f) => f.card === cardId && !(dry && f.hideWhenDry));
 }
