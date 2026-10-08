@@ -131,6 +131,13 @@ function setValue(fid, v, opts = {}) {
   if (fid === 'release' || fid === 'drinkCount') d.currentDays = d.release ? computeCurrentDays(S.day, S.entries, S.settings) : undefined;
   if (fid === 'release' && !S.settings.currentDaysStart && d.release) { S.settings.currentDaysStart = S.day; saveSettings(); }
   if (d.currentDays === undefined) delete d.currentDays;
+  // Editing Release on an earlier day changes the count on every later day
+  if (fid === 'release') {
+    for (const k of Object.keys(S.entries).filter((x) => x > S.day && S.entries[x]?.release).sort()) {
+      const n = computeCurrentDays(k, S.entries, S.settings);
+      if (S.entries[k].currentDays !== n) { S.entries[k].currentDays = n; queueSave(k); }
+    }
+  }
   queueSave(S.day);
   // Typed inputs commit on blur; re-rendering immediately would swallow the tap that caused the blur.
   if (opts.defer) { clearTimeout(deferTimer); deferTimer = setTimeout(render, 400); } else render();

@@ -1,10 +1,11 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import webpush from "npm:web-push@3.6.7";
-// The same analysis code the app's Progress screen runs, loaded from the live site and
-// bundled at deploy time, so the review's numbers always match the charts. Redeploy after changing js/analysis.js.
-import { weeklySummary, weekStart, addDays } from "https://life-plan-simon.netlify.app/js/analysis.js";
-import { FIELDS } from "https://life-plan-simon.netlify.app/js/fields.js";
+// The same analysis code the app's Progress screen runs, pinned to a commit of this repo and
+// bundled at deploy time, so the review's numbers match the charts. After changing js/analysis.js
+// or js/fields.js: push, update the commit below, redeploy.
+import { weeklySummary, weekStart, addDays } from "https://esm.sh/gh/simitebrong/life-plan@1f968683c9011e29f88b67391d249b5ccfc8a1a2/js/analysis.js";
+import { FIELDS } from "https://esm.sh/gh/simitebrong/life-plan@1f968683c9011e29f88b67391d249b5ccfc8a1a2/js/fields.js";
 
 // Life Plan weekly review.
 // Cron mode (x-cron-secret): every 15 min on Sundays; writes the review at the user's chosen time and sends a push.
@@ -133,6 +134,14 @@ Deno.serve(async (req) => {
     if (req.headers.get("x-cron-secret")) {
       if (req.headers.get("x-cron-secret") !== sec.cron_secret) return json({ error: "forbidden" }, 403);
       const now = londonNow();
+      const body = await req.json().catch(() => ({}));
+      // { now: true }: write this week's review immediately, no push (admin use)
+      if (body.now) {
+        const { data: users } = await admin.from("settings").select("user_id").neq("user_id", TEST_USER);
+        const done: any[] = [];
+        for (const u of users ?? []) { const week = weekStart(now.day); const r = await buildReport(u.user_id, week, sec); done.push({ week, headline: r.headline }); }
+        return json({ ok: true, done });
+      }
       const { data: users } = await admin.from("settings").select("user_id,data").neq("user_id", TEST_USER);
       const results: any[] = [];
       for (const u of users ?? []) {
