@@ -7,6 +7,7 @@ import {
 } from './fields.js';
 import { SEED_GOALS, CATEGORIES } from './goals-seed.js';
 import { createLibrary } from './library.js';
+import { createProgress } from './progress.js';
 
 const sb = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { auth: { persistSession: true, autoRefreshToken: true } });
 const $app = document.getElementById('app');
@@ -508,37 +509,7 @@ function finishMessage(d, sc) {
   return lines;
 }
 
-function viewProgress() {
-  const days = Object.keys(S.entries).filter((k) => Object.keys(S.entries[k]).some((x) => !x.startsWith('_'))).sort();
-  if (!days.length) return `<section class="page"><h1>Progress</h1><p class="lead">Your charts start growing after your first check-in. Log today and come back tomorrow.</p></section>`;
-  const today = todayIso();
-  const last7 = Array.from({ length: 7 }, (_, i) => addDays(today, -i));
-  const logged7 = last7.filter((k) => S.entries[k] && days.includes(k)).length;
-  const base = Number(S.settings.baselineSpend) || 12;
-  const spendDays = days.filter((k) => typeof S.entries[k].spend === 'number');
-  const saved = spendDays.reduce((s, k) => s + (base - S.entries[k].spend), 0);
-  const weekDrinks = last7.filter((k) => typeof S.entries[k]?.drinkCount === 'number');
-  const underT = weekDrinks.filter((k) => S.entries[k].drinkCount <= targetFor(k, S.settings.drinkPlan)).length;
-  const dry = days.filter((k) => S.entries[k].drinkCount === 0).length;
-  const last14 = Array.from({ length: 14 }, (_, i) => addDays(today, i - 13));
-  const bars = last14.map((k) => {
-    const sc = S.entries[k] ? scoreDay(S.entries[k], ctxFor(k)).overall : null;
-    const h = sc == null ? 0 : Math.max(4, sc);
-    return `<div class="bar-col" title="${fmtShort(k)}: ${sc ?? 'no entry'}"><div class="bar" style="height:${h}%"></div><span>${new Date(k + 'T12:00:00').toLocaleDateString('en-GB', { weekday: 'narrow' })}</span></div>`;
-  }).join('');
-  return `<section class="page">
-    <h1>Progress</h1>
-    <div class="stat-grid">
-      <div class="stat"><span class="stat-n">${logged7}<small>/7</small></span><span class="stat-l">days logged this week</span></div>
-      <div class="stat"><span class="stat-n">${weekDrinks.length ? `${underT}<small>/${weekDrinks.length}</small>` : '–'}</span><span class="stat-l">days at or under drinks target</span></div>
-      <div class="stat"><span class="stat-n">${saved > 0 ? money(saved) : '£0'}</span><span class="stat-l">saved on alcohol</span></div>
-      <div class="stat"><span class="stat-n">${dry}</span><span class="stat-l">dry days so far</span></div>
-    </div>
-    <h2 class="sub">Last 14 days</h2>
-    <div class="bars">${bars}</div>
-    <p class="note">Full charts, trends by area and insights from your own patterns are coming in the next update.</p>
-  </section>`;
-}
+const viewProgress = () => prog.view();
 
 // ---------- goals ----------
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random().toString(16).slice(2));
@@ -801,6 +772,12 @@ lib = createLibrary({
   entryFor: (day, peek) => (peek ? S.entries[day] : (S.entries[day] ||= {})),
   queueSave: (day) => queueSave(day),
 });
+const prog = createProgress({
+  S, sb, store, esc, todayIso,
+  render: () => render(),
+  openDay: (day) => { S.view = 'today'; S.day = day; render(); window.scrollTo(0, 0); },
+});
+prog.init($app);
 const COG = '<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1 7 17M17 7l2.1-2.1"/>';
 
 function render() {
@@ -839,6 +816,7 @@ $app.addEventListener('click', async (e) => {
   if (!el) return;
   const act = el.dataset.act;
   if (await lib.onClick(act, el)) return;
+  if (await prog.onClick(act, el)) return;
   const fid = el.dataset.f;
   const d = entry();
   switch (act) {
@@ -993,6 +971,7 @@ $app.addEventListener('click', async (e) => {
 $app.addEventListener('change', async (e) => {
   const el = e.target;
   if (await lib.onChange(el)) return;
+  if (prog.onChange(el)) return;
   if (el.matches('.date-pick')) { if (el.value && el.value <= todayIso()) { S.day = el.value; render(); } return; }
   if (el.dataset.gfield) {
     const g = S.goals.find((x) => x.id === S.goalOpen);
@@ -1126,6 +1105,12 @@ function jumpFromUrl() {
   const q = new URLSearchParams(location.search);
   const card = q.get('card');
   const day = q.get('day');
+  const review = q.get('review');
+  if (review && /^\d{4}-\d{2}-\d{2}$/.test(review)) {
+    S.view = 'progress'; prog.openReview(review); render(); window.scrollTo(0, 0);
+    history.replaceState(null, '', location.pathname);
+    return;
+  }
   if (day && /^\d{4}-\d{2}-\d{2}$/.test(day) && day <= todayIso()) {
     S.view = 'today'; S.day = day; render(); window.scrollTo(0, 0);
     history.replaceState(null, '', location.pathname);
