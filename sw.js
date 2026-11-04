@@ -1,6 +1,6 @@
 // Life Plan service worker: offline shell + push reminders
-const CACHE = 'life-plan-v19';
-const SHELL = ['/', '/index.html', '/styles.css', '/js/app.js', '/js/fields.js', '/js/config.js', '/js/goals-seed.js', '/js/library.js', '/js/analysis.js', '/js/charts.js', '/js/progress.js',
+const CACHE = 'life-plan-v20';
+const SHELL = ['/', '/index.html', '/styles.css', '/js/app.js', '/js/fields.js', '/js/config.js', '/js/goals-seed.js', '/js/library.js', '/js/analysis.js', '/js/charts.js', '/js/progress.js', '/js/ritual.js',
   '/manifest.webmanifest', '/icons/icon-192.png'];
 
 self.addEventListener('install', (e) => {

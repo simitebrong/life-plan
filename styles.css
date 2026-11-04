@@ -680,3 +680,73 @@ button.link.inline { padding: 0; font-size: inherit; }
 .off-toggle.on .switch::after { transform: translateX(16px); }
 .off-note { color: var(--ink-2); font-size: 15px; margin: 6px 0 12px; }
 .card.is-off { padding-bottom: 4px; }
+
+/* ---------- Rituals (morning & night) ---------- */
+.rit-entry {
+  display: flex; align-items: center; gap: 12px; width: 100%; margin: 6px 0 12px; padding: 12px 14px; border: 0; border-radius: 14px;
+  background: linear-gradient(120deg, #2A2140, #3B2A4E 60%, #4A3352); color: #F3E6CC; text-align: left; min-height: 56px;
+}
+.rit-entry-ic { width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; background: rgb(232 200 140 / 0.16); color: #E8C88C; flex: none; }
+.rit-entry-t { display: flex; flex-direction: column; font-family: 'Cormorant Garamond', Georgia, serif; font-size: 20px; font-weight: 600; line-height: 1.15; }
+.rit-entry-t small { font-family: var(--body); font-size: 13px; font-weight: 500; color: #CDBFA6; letter-spacing: 0.02em; }
+.rit-entry-go { margin-left: auto; font-size: 26px; color: #E8C88C; }
+body.rit-open { overflow: hidden; }
+body.rit-open .tabbar, body.rit-open .cog { display: none; }
+.rit {
+  position: fixed; inset: 0; z-index: 100; overflow-y: auto; -webkit-overflow-scrolling: touch; color: #F3E9D6;
+  background:
+    radial-gradient(1px 1px at 12% 18%, rgb(255 240 210 / 0.7), transparent 60%),
+    radial-gradient(1px 1px at 78% 9%, rgb(255 240 210 / 0.6), transparent 60%),
+    radial-gradient(1.5px 1.5px at 88% 34%, rgb(255 240 210 / 0.5), transparent 60%),
+    radial-gradient(1px 1px at 22% 62%, rgb(255 240 210 / 0.45), transparent 60%),
+    radial-gradient(1px 1px at 64% 78%, rgb(255 240 210 / 0.4), transparent 60%),
+    radial-gradient(120% 60% at 50% 0%, #4B3560 0%, transparent 70%),
+    linear-gradient(180deg, #1F1830 0%, #17121F 100%);
+  animation: rit-in 0.35s ease-out;
+}
+.rit-morning { background-color: #1F1830; }
+.rit-night { filter: saturate(0.92); }
+@keyframes rit-in { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .rit { animation: none; } }
+.rit-inner { max-width: 520px; margin: 0 auto; padding: calc(56px + env(safe-area-inset-top)) 20px calc(40px + env(safe-area-inset-bottom)); text-align: center; }
+.rit-x {
+  position: fixed; top: calc(10px + env(safe-area-inset-top)); right: 12px; z-index: 2; width: 44px; height: 44px; border-radius: 50%;
+  border: 0; background: rgb(255 255 255 / 0.08); color: #F3E9D6; font-size: 26px; line-height: 1;
+}
+.rit-img { display: block; width: auto; height: auto; max-width: min(100%, 380px); max-height: 64vh; margin: 0 auto; border-radius: 16px;
+  box-shadow: 0 0 0 1px rgb(232 200 140 / 0.35), 0 20px 60px rgb(0 0 0 / 0.5), 0 0 80px rgb(232 200 140 / 0.14); }
+.rit-img.small { width: auto; max-width: 46%; max-height: 30vh; }
+.rit-img.empty { width: min(100%, 340px); display: grid; place-items: center; gap: 10px; aspect-ratio: 3 / 5; max-height: 52vh; padding: 24px; background: rgb(255 255 255 / 0.04); font-size: 15px; color: #CDBFA6; }
+.rit-upload, .rit-change { display: inline-block; cursor: pointer; }
+.rit-upload { background: #E8C88C; color: #2A1F35; font-weight: 700; padding: 12px 20px; border-radius: 999px; }
+.rit-change { margin-top: 18px; color: #CDBFA6; font-size: 14px; text-decoration: underline; text-underline-offset: 3px; }
+.rit-msg { font-size: 14px; color: #E8C88C; }
+.rit-spin { width: 26px; height: 26px; border-radius: 50%; border: 2.5px solid rgb(255 255 255 / 0.15); border-top-color: #E8C88C; animation: spin 0.9s linear infinite; }
+.rit-kicker { margin: 22px 0 4px; font-size: 12.5px; letter-spacing: 0.16em; text-transform: uppercase; color: #E8C88C; font-weight: 700; }
+.rit-intent { font-family: 'Cormorant Garamond', Georgia, serif; font-style: italic; font-size: 24px; line-height: 1.3; margin: 0 auto 18px; max-width: 26ch; color: #F7EEDC; }
+.rit-steps { list-style: none; padding: 0; margin: 0 0 18px; text-align: left; display: grid; gap: 8px; }
+.rit-steps button { display: flex; gap: 12px; align-items: flex-start; width: 100%; border: 0; text-align: left; color: inherit;
+  background: rgb(255 255 255 / 0.05); border-radius: 14px; padding: 12px 14px; }
+.rit-n { width: 26px; height: 26px; flex: none; border-radius: 50%; border: 1px solid rgb(232 200 140 / 0.6); color: #E8C88C; display: grid; place-items: center; font-size: 13px; font-weight: 700; }
+.rit-st { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+.rit-st b { font-family: 'Cormorant Garamond', Georgia, serif; font-size: 19px; font-weight: 600; }
+.rit-st b em { font-family: var(--body); font-style: normal; font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #2A1F35; background: #E8C88C; padding: 1px 7px; border-radius: 999px; margin-left: 6px; vertical-align: 2px; }
+.rit-st span { font-size: 14px; line-height: 1.45; color: #D9CCB4; }
+.rit-sec { font-size: 13px; color: #CDBFA6; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.rit-begin { width: 100%; min-height: 52px; border: 0; border-radius: 999px; background: #E8C88C; color: #2A1F35; font-size: 17px; font-weight: 700; }
+.rit-care { font-size: 13.5px; color: #B9AC95; margin: 14px 0 0; }
+.rit-guide h2 { font-family: 'Cormorant Garamond', Georgia, serif; font-weight: 600; font-size: 34px; margin: 0 0 6px; color: #F7EEDC; }
+.rit-timer { position: relative; width: 168px; height: 168px; margin: 8px auto 6px; display: grid; place-items: center; }
+.rit-timer svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+.rit-ring-t { fill: none; stroke: rgb(255 255 255 / 0.1); stroke-width: 3; }
+.rit-ring-p { fill: none; stroke: #E8C88C; stroke-width: 3; stroke-linecap: round; stroke-dasharray: 276.5; transition: stroke-dashoffset 0.2s linear; }
+.rit-breath { position: absolute; width: 120px; height: 120px; border-radius: 50%; transform: scale(0.55); transition: transform 0.25s linear;
+  background: radial-gradient(circle, rgb(232 200 140 / 0.35), rgb(232 200 140 / 0.08) 70%); }
+.rit-count { position: relative; font-size: 30px; font-weight: 600; font-variant-numeric: tabular-nums; letter-spacing: 0.02em; }
+.rit-phase { font-family: 'Cormorant Garamond', Georgia, serif; font-style: italic; font-size: 22px; margin: 0 0 6px; color: #E8C88C; min-height: 1.3em; }
+.rit-switch { font-weight: 700; color: #E8C88C; margin: 0 0 6px; }
+.rit-how { font-size: 16px; line-height: 1.5; color: #E4D8C2; margin: 6px auto; max-width: 34ch; }
+.rit-ctrl { display: flex; justify-content: center; gap: 12px; margin-top: 18px; }
+.rit-ctrl button { min-width: 52px; min-height: 52px; border-radius: 999px; border: 1px solid rgb(232 200 140 / 0.4); background: transparent; color: #F3E9D6; font-size: 24px; }
+.rit-ctrl button:disabled { opacity: 0.3; }
+.rit-ctrl .rit-pp { font-size: 16px; font-weight: 700; padding: 0 26px; background: rgb(232 200 140 / 0.14); }

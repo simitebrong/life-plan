@@ -8,6 +8,7 @@ import {
 import { SEED_GOALS, CATEGORIES } from './goals-seed.js';
 import { createLibrary } from './library.js';
 import { createProgress } from './progress.js';
+import { createRitual } from './ritual.js';
 
 const sb = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { auth: { persistSession: true, autoRefreshToken: true } });
 const $app = document.getElementById('app');
@@ -264,6 +265,7 @@ function cardHTML(card, d, sc) {
   }
   let extra = '';
   if (card.id === 'drinks') extra = drinksFooter();
+  if (card.id === 'morning' || card.id === 'night') extra = ritual.entry(card.id);
   if (card.id === 'wellbeing') { const w = wellbeingReading(d); if (w != null) extra = `<p class="micro">Wellbeing reading today: <strong>${w}</strong>. This never affects your score.</p>`; }
   const areaScore = card.area && card.id !== 'night' ? sc.areas[card.area] : null;
   const off = card.offToggle && d.workOff;
@@ -792,6 +794,7 @@ const prog = createProgress({
   openDay: (day) => { S.view = 'today'; S.day = day; render(); window.scrollTo(0, 0); },
 });
 prog.init($app);
+const ritual = createRitual({ S, sb, esc, render: () => render() });
 const COG = '<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1 7 17M17 7l2.1-2.1"/>';
 
 function render() {
@@ -804,7 +807,7 @@ function render() {
       <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${COG}</svg></button>
     <nav class="tabbar" aria-label="Sections">${TABS.map(([id, label, icon]) => `<button type="button" class="tab${S.view === id ? ' on' : ''}" data-act="tab" data-v="${id}" aria-current="${S.view === id ? 'page' : 'false'}">
       <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${icon}</svg><span>${label}</span></button>`).join('')}</nav>`}
-    ${S.sheet ? sheetHTML() : ''}${S.celebrate ? celebrateSheet() : ''}${S.guide ? guideSheet() : ''}`;
+    ${S.sheet ? sheetHTML() : ''}${S.celebrate ? celebrateSheet() : ''}${S.guide ? guideSheet() : ''}${ritual.overlay()}`;
   window.scrollTo(0, y);
   setSaveState(S.saveState);
   if (immersive) document.body.dataset.rt = store.get('lp-reader', {}).theme || 'auto'; else delete document.body.dataset.rt;
@@ -831,6 +834,7 @@ $app.addEventListener('click', async (e) => {
   const act = el.dataset.act;
   if (await lib.onClick(act, el)) return;
   if (await prog.onClick(act, el)) return;
+  if (ritual.onClick(act, el)) return;
   const fid = el.dataset.f;
   const d = entry();
   switch (act) {
@@ -992,6 +996,7 @@ $app.addEventListener('change', async (e) => {
   const el = e.target;
   if (await lib.onChange(el)) return;
   if (prog.onChange(el)) return;
+  if (ritual.onChange(el)) return;
   if (el.matches('.date-pick')) { if (el.value && el.value <= todayIso()) { S.day = el.value; render(); } return; }
   if (el.dataset.gfield) {
     const g = S.goals.find((x) => x.id === S.goalOpen);
