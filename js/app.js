@@ -228,6 +228,8 @@ function control(f, d) {
       const val = d.release ? d.currentDays ?? computeCurrentDays(S.day, S.entries, S.settings) : computeCurrentDays(S.day, { ...S.entries, [S.day]: { ...d, release: 'no' } }, S.settings);
       return `<div class="auto"><span class="big">${val}</span><span class="micro">${d.release ? (d.release === 'yes' ? 'Counter resets today' : 'Counted automatically') : 'Fills in when you answer Release'}</span></div>`;
     }
+    case 'ritual':
+      return ritual.entry(f.kind, d[f.id] === 'yes');
     case 'text':
       return `<textarea data-f="${f.id}" rows="4" placeholder="Anything worth remembering about today">${esc(v || '')}</textarea>`;
     case 'workout': {
@@ -247,6 +249,7 @@ function control(f, d) {
 function fieldRow(f, d) {
   const done = isAnswered(f, d);
   const p = f.area ? fieldPoints(f, f.type === 'auto' ? d.currentDays : f.type === 'workout' ? d.workoutScore : d[f.id], ctxFor(S.day)) : null;
+  if (f.type === 'ritual') return `<div class="field done ritual" data-field="${f.id}">${control(f, d)}</div>`;
   return `<div class="field${done ? ' done' : ''}" data-field="${f.id}">
     <div class="field-head"><span class="field-label">${esc(f.label)}</span>${p != null && p !== 0 && f.type !== 'auto' ? `<span class="pts ${p > 0 ? 'pos' : 'neg'}">${p > 0 ? '+' : ''}${p}</span>` : ''}</div>
     ${control(f, d)}
@@ -255,7 +258,8 @@ function fieldRow(f, d) {
 
 function cardHTML(card, d, sc) {
   const fields = visibleFields(card.id, d);
-  const done = fields.filter((f) => isAnswered(f, d)).length;
+  const counted = fields.filter((f) => f.type !== 'ritual');
+  const done = counted.filter((f) => isAnswered(f, d)).length;
   let body = '';
   let group = null;
   for (const f of fields) {
@@ -265,7 +269,6 @@ function cardHTML(card, d, sc) {
   }
   let extra = '';
   if (card.id === 'drinks') extra = drinksFooter();
-  if (card.id === 'morning' || card.id === 'night') extra = ritual.entry(card.id);
   if (card.id === 'wellbeing') { const w = wellbeingReading(d); if (w != null) extra = `<p class="micro">Wellbeing reading today: <strong>${w}</strong>. This never affects your score.</p>`; }
   const areaScore = card.area && card.id !== 'night' ? sc.areas[card.area] : null;
   const off = card.offToggle && d.workOff;
@@ -276,7 +279,7 @@ function cardHTML(card, d, sc) {
   return `<section class="card${off ? ' is-off' : ''}" id="card-${card.id}" style="--accent:${accent}">
     <header class="card-head">
       <h2>${esc(card.title)}</h2>
-      <span class="card-meta">${card.id === 'notes' ? '' : off ? 'Day off ✓' : `${done}/${fields.length}`}${areaScore != null ? ` <span class="area-pill">${areaScore}</span>` : ''}</span>
+      <span class="card-meta">${card.id === 'notes' ? '' : off ? 'Day off ✓' : `${done}/${counted.length}`}${areaScore != null ? ` <span class="area-pill">${areaScore}</span>` : ''}</span>
     </header>
     ${card.hint ? `<p class="card-hint">${esc(card.hint)}</p>` : ''}
     ${toggle}
@@ -474,7 +477,7 @@ function viewToday() {
   const isToday = S.day === todayIso();
   const legend = AREA_ORDER.map((a) => `<li style="--c:${AREAS[a].color}"><span class="dot"></span>${AREAS[a].label}<span class="lv">${sc.areas[a] ?? '–'}</span></li>`).join('');
   const chips = CARDS.map((c) => {
-    const fs = visibleFields(c.id, d);
+    const fs = visibleFields(c.id, d).filter((f) => f.type !== 'ritual');
     const n = fs.filter((f) => isAnswered(f, d)).length;
     const full = c.id !== 'notes' && n === fs.length;
     return `<a href="#card-${c.id}" class="chip${full ? ' full' : ''}" style="--accent:${c.area ? AREAS[c.area].color : c.id === 'work' ? 'var(--a-work)' : 'var(--ink-3)'}">${esc(c.title)}</a>`;
@@ -794,12 +797,18 @@ const prog = createProgress({
   openDay: (day) => { S.view = 'today'; S.day = day; render(); window.scrollTo(0, 0); },
 });
 prog.init($app);
-const ritual = createRitual({ S, sb, esc, render: () => render() });
+const ritual = createRitual({
+  S, sb, esc, render: () => render(),
+  isDone: (kind) => entry()[kind === 'morning' ? 'ritualMorning' : 'ritualNight'] === 'yes',
+  setDone: (kind, on) => setValue(kind === 'morning' ? 'ritualMorning' : 'ritualNight', on ? 'yes' : null),
+  dayLabel: () => (S.day === todayIso() ? 'today' : fmtShort(S.day)),
+});
 const COG = '<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1 7 17M17 7l2.1-2.1"/>';
 
 function render() {
   if (!S.session) { $app.innerHTML = viewAuth(S.authMsg); return; }
   const y = window.scrollY;
+  const ritY = document.querySelector('.rit')?.scrollTop;
   const views = { today: viewToday, workout: viewWorkout, library: () => lib.view(), progress: viewProgress, goals: viewGoals, settings: viewSettings };
   const immersive = S.view === 'library' && lib.immersive();
   $app.innerHTML = `<main class="view view-${S.view}${immersive ? ' immersive' : ''}">${views[S.view]()}</main>
@@ -809,6 +818,7 @@ function render() {
       <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${icon}</svg><span>${label}</span></button>`).join('')}</nav>`}
     ${S.sheet ? sheetHTML() : ''}${S.celebrate ? celebrateSheet() : ''}${S.guide ? guideSheet() : ''}${ritual.overlay()}`;
   window.scrollTo(0, y);
+  if (ritY != null) { const r = document.querySelector('.rit'); if (r) r.scrollTop = ritY; }
   setSaveState(S.saveState);
   if (immersive) document.body.dataset.rt = store.get('lp-reader', {}).theme || 'auto'; else delete document.body.dataset.rt;
   lib.afterRender();

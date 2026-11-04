@@ -49,6 +49,8 @@ export const FIELDS = [
   { id: 'morningWood', card: 'morning', area: 'sleep', label: 'Morning wood', type: 'choice',
     options: [o('none', 'None', 0), o('semi', 'Semi', 5), o('full', 'Full mast', 10)] },
   { id: 'morningVitamins', card: 'morning', area: 'food', label: 'Morning vitamins', type: 'choice', options: yesno(5, 0) },
+  // Grounding rituals: ticked on the ritual page. Each fills a different area so both count.
+  { id: 'ritualMorning', card: 'morning', area: 'mind', label: 'Morning ritual', type: 'ritual', kind: 'morning', pts: 75, since: '2026-11-04' },
 
   // Food
   { id: 'breakfast', card: 'food', area: 'food', label: 'Breakfast', type: 'choice', options: meal },
@@ -154,6 +156,7 @@ export const FIELDS = [
   // Recorded for insight only; never scored.
   { id: 'eczema', card: 'night', area: null, label: 'Eczema', type: 'choice', scale: true, low: 'least problematic', high: 'most',
     options: [1, 2, 3, 4, 5].map((n) => o(n, String(n))) },
+  { id: 'ritualNight', card: 'night', area: 'rel', label: 'Night ritual', type: 'ritual', kind: 'night', pts: 75, since: '2026-11-04' },
 
   // Notes
   { id: 'notes', card: 'notes', area: null, label: 'Notes', type: 'text' },
@@ -292,6 +295,7 @@ export function fieldPoints(f, v, ctx) {
     }
     case 'time': return band(f.bands, timeToMins(v, f.evening));
     case 'auto': return band(f.bands, v);
+    case 'ritual': return v === 'yes' ? f.pts : null;
     case 'workout': {
       const t = ctx.workoutTarget;
       if (!t || !(v > 0)) return null;
@@ -352,6 +356,7 @@ export function wellbeingReading(d) {
 export function isAnswered(f, data) {
   if (f.type === 'auto') return answered(data.release);
   if (f.type === 'workout') return data.workoutScore > 0;
+  if (f.type === 'ritual') return data[f.id] === 'yes';
   return answered(data[f.id]);
 }
 

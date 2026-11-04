@@ -72,6 +72,11 @@ function fieldMetric(f) {
       // numeric reading so cat fields can be outcomes too: severity for symptoms, points for scored choices
       num: ordinal ? (e) => (answered(e[f.id]) ? levels.find((l) => l.v === e[f.id])?.rank ?? null : null) : null };
   }
+  if (f.type === 'ritual') {
+    // done or not, from the day it was introduced
+    return { ...base, kind: 'cat', levels: [{ v: 'yes', label: 'Done', rank: 1 }, { v: 'no', label: 'Not done', rank: 0 }], better: 0,
+      get: (e, day) => (day < f.since ? null : e[f.id] === 'yes' ? 'yes' : 'no') };
+  }
   if (f.type === 'multi') {
     const levels = f.options.filter((o) => !o.exclusive).map((o) => ({ v: o.v, label: o.label }));
     return { ...base, kind: 'num', multi: true, levels, label: `${f.label} (how many)`, fmt: fmtNum(1), better: 1,
@@ -231,7 +236,7 @@ export function streak(entries, today) {
 // ---------- habits ----------
 // A habit is "done" when a scored field earned points that day. Workouts use the target.
 export const HABITS = [
-  ['morningVitamins', 'Morning vitamins'], ['eveningVitamins', 'Evening vitamins'], ['homeWorkout', 'Home workout'],
+  ['ritualMorning', 'Morning ritual'], ['ritualNight', 'Night ritual'], ['morningVitamins', 'Morning vitamins'], ['eveningVitamins', 'Evening vitamins'], ['homeWorkout', 'Home workout'],
   ['targetAchieved', 'Drinks on target'], ['loAlarm', 'Last-orders alarm'], ['dinner', 'Healthy dinner'],
   ['eveningTreats', 'No evening treats'], ['bedTime', 'Bed by 22:30'], ['outOfBed', 'Up by 06:30'],
   ['duolingo', 'Duolingo'], ['visualisation', 'Visualisation'], ['goals', 'Goal progress'], ['fcProject', 'FC project'],
@@ -244,6 +249,7 @@ export function habitDone(id, e, day, ctx) {
   if (id === 'outOfBed') { const m = timeToMins(e.outOfBed); return m == null ? null : m <= 390; }
   if (id === 'eveningTreats') return answered(e.eveningTreats) ? e.eveningTreats === 'none' : null;
   if (id === 'dinner') return answered(e.dinner) ? e.dinner === 'healthy' : null;
+  if (FIELD[id]?.type === 'ritual') return day < FIELD[id].since ? null : e[id] === 'yes';
   if (id === 'splashDown') return e.workOff || !answered(e.splashDown) ? null : e.splashDown === 'yes';
   const f = FIELD[id]; const v = e[id];
   if (!answered(v)) return null;
@@ -280,11 +286,13 @@ const FAM = {
   rel: ['intimacy', 'release', 'cage', 'stretcher', 'staminaTraining', 'service', 'bedWithJen'],
   mind: ['social', 'fun', 'visualisation', 'goals', 'duolingo', 'fcProject', 'basil', 'decMH', 'clothes', 'driving'],
   work: ['workDay', 'workStart', 'workEnd', 'workHours', 'workIntensity', 'workFeeling', 'splashDown'],
+  ritual: ['ritualMorning', 'ritualNight'],
   food: ['dinner', 'eveningTreats', 'snacks', 'breakfast', 'lunch', 'morningVitamins', 'eveningVitamins'],
 };
 const MOOD = ['stress', 'anxiety', 'motivation', 'selfEsteem', 'wellbeing'];
 const SLEEP_OUT = ['sleepQuality', 'hoursInBed', 'nightTerrors', 'morningWood', 'outOfBed'];
 const KEY = [
+  [FAM.ritual, [...MOOD, 'drinkCount', 'firstDrink', 'sleepQuality', 'hoursInBed', 'nightTerrors', 'bedTime', 'intimacy', 'workIntensity', 'workFeeling']],
   [FAM.work, [...MOOD, 'drinkCount', 'firstDrink', 'lastDrink', 'spend', 'sleepQuality', 'hoursInBed', 'nightTerrors', 'bedTime', 'workoutScore', 'palpitations', 'eczema', 'score']],
   [[...FAM.sleep, ...FAM.drinks, ...FAM.move, 'stress', 'anxiety', 'motivation'], ['workIntensity', 'workFeeling', 'workHours']],
   [FAM.drinks, [...SLEEP_OUT, ...MOOD, 'palpitations', 'eczema', 'workoutScore', 'score']],
