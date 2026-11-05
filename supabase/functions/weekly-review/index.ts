@@ -4,8 +4,8 @@ import webpush from "npm:web-push@3.6.7";
 // The same analysis code the app's Progress screen runs, pinned to a commit of this repo and
 // bundled at deploy time, so the review's numbers match the charts. After changing js/analysis.js
 // or js/fields.js: push, update the commit below, redeploy.
-import { weeklySummary, weekStart, addDays } from "https://esm.sh/gh/simitebrong/life-plan@0b4b23ea54dbeaf584518e2130fe2532570c4b4c/js/analysis.js";
-import { FIELDS } from "https://esm.sh/gh/simitebrong/life-plan@0b4b23ea54dbeaf584518e2130fe2532570c4b4c/js/fields.js";
+import { weeklySummary, weekStart, addDays } from "https://esm.sh/gh/simitebrong/life-plan@e2ef4ce212d9665ccf7780354ca9523e8dce397c/js/analysis.js";
+import { FIELDS } from "https://esm.sh/gh/simitebrong/life-plan@e2ef4ce212d9665ccf7780354ca9523e8dce397c/js/fields.js";
 
 // Life Plan weekly review.
 // Cron mode (x-cron-secret): every 15 min on Sundays; writes the review at the user's chosen time and sends a push.
@@ -43,6 +43,7 @@ workout: home workout reps by session {morning:{exercise:reps}, midday:{...}, ca
 readSecs / basilReadSecs: seconds spent reading in the app's library (Basil = his own stories)
 done: he tapped "Finish my day"
 ritualMorning / ritualNight: "yes" = he completed that grounding ritual (breath, stretches, kneeling stillness before his wife's picture); each adds 75 points. Celebrate them; never treat a missed one as a failure.
+kidsTime: quality time with his kids that evening; "notPresent" means the kids weren't around, so it is not a miss.
 workOff: true = not a working day (weekend or holiday), so the Work fields are intentionally blank, not missed
 Times: firstDrink/lastDrink/bedTime are evening times (before noon = after midnight). Morning fields (outOfBed, sleepQuality, nightTerrors, snoring, morningWood, whichBed) describe the night before.`;
 
