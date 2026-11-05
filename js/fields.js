@@ -153,6 +153,8 @@ export const FIELDS = [
   { id: 'bedTime', card: 'night', area: 'sleep', label: 'Bed time', type: 'time', defaultTime: '22:30', evening: true,
     bands: [[1320, 10], [1350, 5], [1380, 3], [1410, -5], [Infinity, -10]] },
   { id: 'bedWithJen', card: 'night', area: 'rel', label: 'Bed with Jen', type: 'choice', options: yesno(10, 0) },
+  { id: 'kidsTime', card: 'night', area: 'rel', label: 'Quality time with kids', type: 'choice',
+    options: [o('yes', 'Yes', 50, { star: true }), o('no', 'No', -20), o('notPresent', 'Not present', 0)] },
   // Recorded for insight only; never scored.
   { id: 'eczema', card: 'night', area: null, label: 'Eczema', type: 'choice', scale: true, low: 'least problematic', high: 'most',
     options: [1, 2, 3, 4, 5].map((n) => o(n, String(n))) },

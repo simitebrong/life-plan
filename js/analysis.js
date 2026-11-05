@@ -250,6 +250,7 @@ export function habitDone(id, e, day, ctx) {
   if (id === 'eveningTreats') return answered(e.eveningTreats) ? e.eveningTreats === 'none' : null;
   if (id === 'dinner') return answered(e.dinner) ? e.dinner === 'healthy' : null;
   if (FIELD[id]?.type === 'ritual') return day < FIELD[id].since ? null : e[id] === 'yes';
+  if (id === 'kidsTime') return e.kidsTime === 'yes' ? true : e.kidsTime === 'no' ? false : null; // not present = no data
   if (id === 'splashDown') return e.workOff || !answered(e.splashDown) ? null : e.splashDown === 'yes';
   const f = FIELD[id]; const v = e[id];
   if (!answered(v)) return null;
@@ -283,7 +284,7 @@ const FAM = {
   evening: ['bedTime', 'eveningTreats', 'eveningVitamins', 'bedWithJen', 'dinner', 'lastDrink', 'drinkCount'],
   move: ['workoutScore', 'morningWorkout', 'middayWorkout', 'club', 'otherActivity', 'schoolRuns'],
   felt: ['stress', 'anxiety', 'motivation', 'selfEsteem', 'ptsd', 'palpitations'],
-  rel: ['intimacy', 'release', 'cage', 'stretcher', 'staminaTraining', 'service', 'bedWithJen'],
+  rel: ['intimacy', 'release', 'cage', 'stretcher', 'staminaTraining', 'service', 'bedWithJen', 'kidsTime'],
   mind: ['social', 'fun', 'visualisation', 'goals', 'duolingo', 'fcProject', 'basil', 'decMH', 'clothes', 'driving'],
   work: ['workDay', 'workStart', 'workEnd', 'workHours', 'workIntensity', 'workFeeling', 'splashDown'],
   ritual: ['ritualMorning', 'ritualNight'],
