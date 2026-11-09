@@ -3,7 +3,7 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY, VAPID_PUBLIC_KEY, APP_VERSION } from '
 import {
   AREAS, AREA_ORDER, CARDS, FIELDS, FIELD, DEFAULT_SETTINGS, targetFor, scoreDay,
   computeCurrentDays, wellbeingReading, isAnswered, visibleFields, fieldPoints,
-  EXERCISES, EX_GROUPS, ALL_BOX_BONUS, workoutBreakdown, workoutTarget, workoutAreasFor,
+  EXERCISES, EX_GROUPS, ALL_BOX_BONUS, workoutBreakdown, workoutTarget, workoutAreasFor, pacing, DEFAULT_GAP,
 } from './fields.js';
 import { SEED_GOALS, CATEGORIES } from './goals-seed.js';
 import { createLibrary } from './library.js';
@@ -230,6 +230,8 @@ function control(f, d) {
     }
     case 'ritual':
       return ritual.entry(f.kind, d[f.id] === 'yes');
+    case 'pacing':
+      return pacingHTML(d);
     case 'text':
       return `<textarea data-f="${f.id}" rows="4" placeholder="Anything worth remembering about today">${esc(v || '')}</textarea>`;
     case 'workout': {
@@ -256,9 +258,49 @@ function fieldRow(f, d) {
   </div>`;
 }
 
+// ---------- drink pacing ----------
+const drinkGap = () => Number(S.settings.drinkGap) || DEFAULT_GAP;
+const fmtClock = (t) => new Date(t).toTimeString().slice(0, 5);
+const fmtLeft = (ms) => { const s2 = Math.max(0, Math.ceil(ms / 1000)); const m2 = Math.floor(s2 / 60); return `${m2}:${String(s2 % 60).padStart(2, '0')}`; };
+function pacingHTML(d) {
+  const gap = drinkGap(); const p = pacing(d.drinkPacing); const live = S.day === todayIso();
+  const adj = `<div class="gap-adj"><span>Gap</span>
+    <button type="button" class="opt slim ghost" data-act="gap" data-n="-5" aria-label="5 minutes shorter">−5</button>
+    <b>${gap} min</b>
+    <button type="button" class="opt slim ghost" data-act="gap" data-n="5" aria-label="5 minutes longer">+5</button></div>`;
+  let main;
+  if (!p.last) {
+    main = live ? `<p class="pace-msg">Tap <b>+</b> as each drink starts. The timer holds a ${gap}-minute gap, and every drink after the full gap earns 10 points.</p>`
+      : `<p class="pace-msg">No drink times were logged this day.</p>`;
+  } else {
+    const until = p.last.t + gap * 60000; const left = until - Date.now();
+    if (live && left > 0) {
+      const frac = 1 - left / (gap * 60000);
+      main = `<div class="pace-live" data-until="${until}" data-gap="${gap * 60000}">
+        <svg viewBox="0 0 64 64" class="pace-ring" aria-hidden="true"><circle cx="32" cy="32" r="28" class="pr-t"/><circle cx="32" cy="32" r="28" class="pr-p" transform="rotate(-90 32 32)" style="stroke-dashoffset:${(175.9 * (1 - frac)).toFixed(1)}"/></svg>
+        <div><span class="pace-left" aria-live="off">${fmtLeft(left)}</span><span class="pace-sub">Next drink from <b>${fmtClock(until)}</b></span></div></div>`;
+    } else if (live) {
+      main = `<div class="pace-live ready"><span class="pace-ok" aria-hidden="true">✓</span><div><span class="pace-left">Gap reached</span><span class="pace-sub">The next one earns +10, whenever you're ready. No rush.</span></div></div>`;
+    } else main = '';
+  }
+  const chips = p.last ? `<div class="pace-log">${(d.drinkPacing || []).map((x, i) => {
+    const g = i ? p.list[i - 1] : null;
+    return `<span class="pchip${g ? (g.ok ? ' ok' : '') : ' first'}">${fmtClock(x.t)}${g ? ` · ${Math.round(g.mins)}m${g.ok ? ' ✓' : ''}` : ''}</span>`;
+  }).join('')}</div>${p.gaps ? `<p class="micro${p.paced ? ' good' : ''}">${p.paced} of ${p.gaps} paced${p.paced ? ` · +${p.paced * 10}` : ''}${p.avgGap != null ? ` · average gap ${Math.round(p.avgGap)} min` : ''}</p>` : ''}` : '';
+  return `<div class="pace">${main}${chips}${live ? adj : ''}</div>`;
+}
+// tick the countdown in place each second; re-render once when the gap is reached
+setInterval(() => {
+  const el = document.querySelector('.pace-live[data-until]'); if (!el) return;
+  const left = Number(el.dataset.until) - Date.now();
+  if (left <= 0) { if (navigator.vibrate && document.visibilityState === 'visible') navigator.vibrate([40, 60, 40]); render(); return; }
+  el.querySelector('.pace-left').textContent = fmtLeft(left);
+  const ring = el.querySelector('.pr-p'); if (ring) ring.style.strokeDashoffset = (175.9 * (left / Number(el.dataset.gap))).toFixed(1);
+}, 1000);
+
 function cardHTML(card, d, sc) {
   const fields = visibleFields(card.id, d);
-  const counted = fields.filter((f) => f.type !== 'ritual');
+  const counted = fields.filter((f) => !f.bonus);
   const done = counted.filter((f) => isAnswered(f, d)).length;
   let body = '';
   let group = null;
@@ -477,7 +519,7 @@ function viewToday() {
   const isToday = S.day === todayIso();
   const legend = AREA_ORDER.map((a) => `<li style="--c:${AREAS[a].color}"><span class="dot"></span>${AREAS[a].label}<span class="lv">${sc.areas[a] ?? '–'}</span></li>`).join('');
   const chips = CARDS.map((c) => {
-    const fs = visibleFields(c.id, d).filter((f) => f.type !== 'ritual');
+    const fs = visibleFields(c.id, d).filter((f) => !f.bonus);
     const n = fs.filter((f) => isAnswered(f, d)).length;
     const full = c.id !== 'notes' && n === fs.length;
     return `<a href="#card-${c.id}" class="chip${full ? ' full' : ''}" style="--accent:${c.area ? AREAS[c.area].color : c.id === 'work' ? 'var(--a-work)' : 'var(--ink-3)'}">${esc(c.title)}</a>`;
@@ -872,7 +914,25 @@ $app.addEventListener('click', async (e) => {
     case 'count': {
       const n = Number(el.dataset.n);
       const cur = typeof d.drinkCount === 'number' ? d.drinkCount : 0;
-      setValue('drinkCount', Math.max(0, cur + n));
+      const next = Math.max(0, cur + n);
+      if (S.day === todayIso()) {
+        const log = Array.isArray(d.drinkPacing) ? [...d.drinkPacing] : [];
+        if (n > 0) {
+          const now = Date.now(); log.push({ t: now, g: drinkGap() });
+          const hm = new Date(now).toTimeString().slice(0, 5);
+          if (!d.firstDrink) d.firstDrink = hm;
+          d.lastDrink = hm;
+        } else {
+          while (log.length > Math.ceil(next)) log.pop();
+        }
+        if (log.length) d.drinkPacing = log; else delete d.drinkPacing;
+      }
+      setValue('drinkCount', next);
+      break;
+    }
+    case 'gap': {
+      S.settings.drinkGap = Math.max(5, Math.min(180, drinkGap() + Number(el.dataset.n)));
+      saveSettings(); render();
       break;
     }
     case 'day': {

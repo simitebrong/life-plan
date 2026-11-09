@@ -1,7 +1,7 @@
 // Life Plan — analysis engine. Pure functions, no DOM: used by the app's Progress
 // screen and by the weekly-review edge function (Deno), so the numbers always agree.
 import {
-  AREAS, AREA_ORDER, FIELDS, FIELD, CARDS, targetFor, scoreDay, wellbeingReading,
+  AREAS, AREA_ORDER, FIELDS, FIELD, CARDS, targetFor, scoreDay, wellbeingReading, pacing,
   workoutTarget, workoutScore, timeToMins, fieldPoints, DEFAULT_SETTINGS,
 } from './fields.js';
 
@@ -72,6 +72,10 @@ function fieldMetric(f) {
       // numeric reading so cat fields can be outcomes too: severity for symptoms, points for scored choices
       num: ordinal ? (e) => (answered(e[f.id]) ? levels.find((l) => l.v === e[f.id])?.rank ?? null : null) : null };
   }
+  if (f.type === 'pacing') {
+    return { ...base, label: 'Paced drinks', kind: 'num', fmt: fmtNum(0), better: 1, chart: 'bar', zero: true,
+      get: (e) => (Array.isArray(e[f.id]) && e[f.id].length > 1 ? pacing(e[f.id]).paced : null) };
+  }
   if (f.type === 'ritual') {
     // done or not, from the day it was introduced
     return { ...base, kind: 'cat', levels: [{ v: 'yes', label: 'Done', rank: 1 }, { v: 'no', label: 'Not done', rank: 0 }], better: 0,
@@ -105,6 +109,8 @@ export function buildMetrics() {
     src: ['drinkCount', 'targetAchieved'], get: (e, day, ctx) => (typeof e.drinkCount === 'number' && ctx(day).target != null ? e.drinkCount - ctx(day).target : null) });
   add({ id: 'saved', label: 'Saved vs usual spend', group: 'Drinks', kind: 'num', unit: '£', fmt: fmtMoney, better: 1, chart: 'bar', cumulative: true,
     src: ['spend'], get: (e, day, ctx) => (typeof e.spend === 'number' ? ctx(day).baselineSpend - e.spend : null) });
+  add({ id: 'avgGap', label: 'Average gap between drinks', group: 'Drinks', kind: 'num', unit: 'min', fmt: (v) => (v == null ? '–' : `${Math.round(v)} min`), better: 1, chart: 'bar', zero: true,
+    src: ['drinkPacing', 'drinkCount'], get: (e) => pacing(e.drinkPacing).avgGap });
   add({ id: 'drinkHours', label: 'Drinking window', group: 'Drinks', kind: 'num', unit: 'h', fmt: fmtHours, better: -1, chart: 'line',
     src: ['firstDrink', 'lastDrink'], get: (e) => { const a = timeToMins(e.firstDrink, true); const b = timeToMins(e.lastDrink, true); return a != null && b != null && b >= a ? (b - a) / 60 : null; } });
   add({ id: 'hoursInBed', label: 'Time in bed', group: 'Morning', kind: 'num', unit: 'h', night: true, fmt: fmtHours, better: 1, chart: 'line',
@@ -279,7 +285,7 @@ const lc = (t) => t.replace(/\b([A-Z])([a-z])/g, (_, a, b) => a.toLowerCase() + 
 // Links worth looking for first. Anything else needs far more evidence before it's shown,
 // so a handful of days can't produce a list of coincidences.
 const FAM = {
-  drinks: ['drinkCount', 'firstDrink', 'lastDrink', 'drinkHours', 'spend', 'loAlarm'],
+  drinks: ['drinkCount', 'firstDrink', 'lastDrink', 'drinkHours', 'spend', 'loAlarm', 'drinkPacing', 'avgGap'],
   sleep: ['sleepQuality', 'hoursInBed', 'nightTerrors', 'outOfBed', 'bedTime', 'whichBed', 'snoring', 'morningWood'],
   evening: ['bedTime', 'eveningTreats', 'eveningVitamins', 'bedWithJen', 'dinner', 'lastDrink', 'drinkCount'],
   move: ['workoutScore', 'morningWorkout', 'middayWorkout', 'club', 'otherActivity', 'schoolRuns'],
@@ -533,6 +539,12 @@ export function weeklySummary(entries, settings, wkStart, extra = {}) {
     const sc = scoreDay(e, ctx(d));
     const partial = d === extra.today && !e.done;
     const raw = Object.fromEntries(KEEP_RAW.filter((k) => answered(e[k])).map((k) => [k, e[k]]));
+    if (Array.isArray(e.drinkPacing)) {
+      // readable for the review: London clock times and minutes since the previous drink
+      const hm = (t) => new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/London', hour: '2-digit', minute: '2-digit' }).format(new Date(t));
+      raw.drinkPacing = e.drinkPacing.map((x, i) => ({ time: hm(x.t), gapTarget: x.g,
+        minsSincePrevious: i ? Math.round((x.t - e.drinkPacing[i - 1].t) / 60000) : null, paced: i ? (x.t - e.drinkPacing[i - 1].t) / 60000 >= x.g - 0.01 : null }));
+    }
     return { day: d, weekday: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][weekday(d)], logged: true, inProgress: partial || undefined, score: partial ? null : sc.overall, areas: partial ? null : sc.areas,
       drinksTarget: ctx(d).target, workoutTarget: ctx(d).workoutTarget, wellbeing: wellbeingReading(e), data: raw };
   });

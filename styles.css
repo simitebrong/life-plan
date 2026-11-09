@@ -768,3 +768,24 @@ body.rit-open .tabbar, body.rit-open .cog { display: none; }
 .rit-begin.ghost { margin-top: 12px; background: transparent; color: #E8C88C; border: 1px solid rgb(232 200 140 / 0.45); }
 .rit-entry.done { background: linear-gradient(120deg, #2A2140, #4A3352); box-shadow: inset 0 0 0 1px rgb(232 200 140 / 0.5); }
 .rit-entry.done .rit-entry-ic { background: #E8C88C; color: #2A1F35; font-weight: 700; font-size: 18px; }
+
+/* ---------- Drink pacing ---------- */
+.pace { display: grid; gap: 10px; }
+.pace-msg { margin: 0; color: var(--ink-2); font-size: 15px; }
+.pace-live { display: flex; align-items: center; gap: 14px; background: var(--opt-bg); border-radius: 14px; padding: 10px 14px; }
+.pace-live > div { display: flex; flex-direction: column; }
+.pace-ring { width: 56px; height: 56px; flex: none; }
+.pr-t { fill: none; stroke: var(--line); stroke-width: 5; }
+.pr-p { fill: none; stroke: var(--a-drinks); stroke-width: 5; stroke-linecap: round; stroke-dasharray: 175.9; transition: stroke-dashoffset 1s linear; }
+.pace-left { font-family: var(--display); font-size: 28px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.1; }
+.pace-sub { font-size: 14px; color: var(--ink-2); }
+.pace-live.ready { background: color-mix(in srgb, var(--good) 14%, var(--surface)); }
+.pace-live.ready .pace-left { font-size: 22px; }
+.pace-ok { width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; background: var(--good); color: #fff; font-size: 22px; font-weight: 700; flex: none; }
+.pace-log { display: flex; flex-wrap: wrap; gap: 6px; }
+.pchip { font-size: 13px; font-weight: 600; padding: 4px 9px; border-radius: 999px; background: var(--opt-bg); color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.pchip.ok { background: color-mix(in srgb, var(--good) 16%, var(--surface)); color: var(--ink); }
+.pace .micro { margin: 0; }
+.gap-adj { display: flex; align-items: center; gap: 8px; font-size: 14.5px; color: var(--ink-2); }
+.gap-adj b { color: var(--ink); min-width: 56px; text-align: center; font-variant-numeric: tabular-nums; }
+@media (prefers-reduced-motion: reduce) { .pr-p { transition: none; } }

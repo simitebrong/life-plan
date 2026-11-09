@@ -50,7 +50,7 @@ export const FIELDS = [
     options: [o('none', 'None', 0), o('semi', 'Semi', 5), o('full', 'Full mast', 10)] },
   { id: 'morningVitamins', card: 'morning', area: 'food', label: 'Morning vitamins', type: 'choice', options: yesno(5, 0) },
   // Grounding rituals: ticked on the ritual page. Each fills a different area so both count.
-  { id: 'ritualMorning', card: 'morning', area: 'mind', label: 'Morning ritual', type: 'ritual', kind: 'morning', pts: 75, since: '2026-11-04' },
+  { id: 'ritualMorning', card: 'morning', area: 'mind', label: 'Morning ritual', type: 'ritual', kind: 'morning', pts: 75, since: '2026-11-04', bonus: true },
 
   // Food
   { id: 'breakfast', card: 'food', area: 'food', label: 'Breakfast', type: 'choice', options: meal },
@@ -88,6 +88,8 @@ export const FIELDS = [
 
   // Drinks
   { id: 'drinkCount', card: 'drinks', area: 'drinks', label: 'Number of drinks', type: 'count' },
+  // Pacing: each + on drinks is stamped [{t: ms, g: gap minutes at the time}]; 10 points per drink taken after the full gap
+  { id: 'drinkPacing', card: 'drinks', area: 'drinks', label: 'Pacing', type: 'pacing', pts: 10, hideWhenDry: true, bonus: true },
   { id: 'firstDrink', card: 'drinks', area: 'drinks', label: 'First drink', type: 'time', defaultTime: '17:00', evening: true,
     hideWhenDry: true,
     bands: [[960, -10], [990, 1], [1020, 2], [1050, 3], [1080, 4], [1110, 5], [1140, 7], [Infinity, 10]] },
@@ -158,7 +160,7 @@ export const FIELDS = [
   // Recorded for insight only; never scored.
   { id: 'eczema', card: 'night', area: null, label: 'Eczema', type: 'choice', scale: true, low: 'least problematic', high: 'most',
     options: [1, 2, 3, 4, 5].map((n) => o(n, String(n))) },
-  { id: 'ritualNight', card: 'night', area: 'rel', label: 'Night ritual', type: 'ritual', kind: 'night', pts: 75, since: '2026-11-04' },
+  { id: 'ritualNight', card: 'night', area: 'rel', label: 'Night ritual', type: 'ritual', kind: 'night', pts: 75, since: '2026-11-04', bonus: true },
 
   // Notes
   { id: 'notes', card: 'notes', area: null, label: 'Notes', type: 'text' },
@@ -298,6 +300,7 @@ export function fieldPoints(f, v, ctx) {
     case 'time': return band(f.bands, timeToMins(v, f.evening));
     case 'auto': return band(f.bands, v);
     case 'ritual': return v === 'yes' ? f.pts : null;
+    case 'pacing': { const p = pacing(v); return p.gaps ? p.paced * f.pts : null; }
     case 'workout': {
       const t = ctx.workoutTarget;
       if (!t || !(v > 0)) return null;
@@ -317,6 +320,19 @@ export function fieldPoints(f, v, ctx) {
     }
     default: return null;
   }
+}
+
+// Drink pacing: how many drinks (after the first) came after the full gap
+export const DEFAULT_GAP = 35;
+export function pacing(log) {
+  const L = Array.isArray(log) ? log : [];
+  const gaps = [];
+  for (let i = 1; i < L.length; i++) {
+    const mins = (L[i].t - L[i - 1].t) / 60000;
+    gaps.push({ mins, need: L[i].g, ok: mins >= L[i].g - 0.01 });
+  }
+  return { drinks: L.length, gaps: gaps.length, paced: gaps.filter((x) => x.ok).length, list: gaps,
+    avgGap: gaps.length ? gaps.reduce((a, x) => a + x.mins, 0) / gaps.length : null, last: L[L.length - 1] || null };
 }
 
 export function scoreDay(data, ctx) {
@@ -359,6 +375,7 @@ export function isAnswered(f, data) {
   if (f.type === 'auto') return answered(data.release);
   if (f.type === 'workout') return data.workoutScore > 0;
   if (f.type === 'ritual') return data[f.id] === 'yes';
+  if (f.type === 'pacing') return Array.isArray(data[f.id]) && data[f.id].length > 0;
   return answered(data[f.id]);
 }
 
