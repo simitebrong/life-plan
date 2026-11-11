@@ -4,8 +4,8 @@ import webpush from "npm:web-push@3.6.7";
 // The same analysis code the app's Progress screen runs, pinned to a commit of this repo and
 // bundled at deploy time, so the review's numbers match the charts. After changing js/analysis.js
 // or js/fields.js: push, update the commit below, redeploy.
-import { weeklySummary, weekStart, addDays } from "https://esm.sh/gh/simitebrong/life-plan@73be87f9ed623318de250f6d67e2a9f2b76b04c9/js/analysis.js";
-import { FIELDS } from "https://esm.sh/gh/simitebrong/life-plan@73be87f9ed623318de250f6d67e2a9f2b76b04c9/js/fields.js";
+import { weeklySummary, weekStart, addDays } from "https://esm.sh/gh/simitebrong/life-plan@e1e1eec184cf64079e705797d794a6af18c45ae9/js/analysis.js";
+import { FIELDS } from "https://esm.sh/gh/simitebrong/life-plan@e1e1eec184cf64079e705797d794a6af18c45ae9/js/fields.js";
 
 // Life Plan weekly review.
 // Cron mode (x-cron-secret): every 15 min on Sundays; writes the review at the user's chosen time and sends a push.
@@ -44,6 +44,8 @@ readSecs / basilReadSecs: seconds spent reading in the app's library (Basil = hi
 done: he tapped "Finish my day"
 ritualMorning / ritualNight: "yes" = he completed that grounding ritual (breath, stretches, kneeling stillness before his wife's picture); each adds 75 points. Celebrate them; never treat a missed one as a failure.
 drinkPacing: each drink he logged that day with its clock time, the minimum gap he'd set (gapTarget, minutes; he raises it in 5-minute steps over time), minutes since the previous drink, and paced=true when he waited the full gap (+10 points each). Slower pacing is the goal: celebrate paced drinks and longer average gaps.
+retraction / regularity: personal symptom readings 0-5 (regularity = bowel movements), recorded for insight only; mention matter-of-factly if a link stands out, never diagnose.
+dmApp: how much he used his devotion/marriage support app that day.
 kidsTime: quality time with his kids that evening; "notPresent" means the kids weren't around, so it is not a miss.
 workOff: true = not a working day (weekend or holiday), so the Work fields are intentionally blank, not missed
 Times: firstDrink/lastDrink/bedTime are evening times (before noon = after midnight). Morning fields (outOfBed, sleepQuality, nightTerrors, snoring, morningWood, whichBed) describe the night before.`;
