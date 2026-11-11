@@ -97,8 +97,8 @@ export const FIELDS = [
     hideWhenDry: true,
     bands: [[1260, 10], [1320, 5], [1350, 0], [1380, -5], [Infinity, -10]] },
   { id: 'spend', card: 'drinks', area: 'drinks', label: 'Spent on alcohol', type: 'money' },
-  { id: 'loAlarm', card: 'drinks', area: 'drinks', label: 'Last orders alarm', type: 'choice', options: yesno(10, 0), hideWhenDry: true },
-  { id: 'targetAchieved', card: 'drinks', area: 'drinks', label: 'Target limit achieved', type: 'choice', options: yesno(10, 0) },
+  { id: 'loAlarm', card: 'drinks', area: 'drinks', label: 'Last orders alarm', type: 'choice', options: yesno(20, 0), hideWhenDry: true },
+  { id: 'targetAchieved', card: 'drinks', area: 'drinks', label: 'Target limit achieved', type: 'choice', options: yesno(20, 0) },
 
   // Relationship
   { id: 'intimacy', card: 'rel', area: 'rel', label: 'Intimacy', type: 'choice', scale: true,
@@ -112,7 +112,9 @@ export const FIELDS = [
   { id: 'currentDays', card: 'rel', area: 'rel', label: 'Current days', type: 'auto',
     bands: [[8, 0], [15, 5], [22, 10], [29, 15], [Infinity, 20]] },
   { id: 'service', card: 'rel', area: 'rel', label: 'Service', type: 'choice',
-    options: [o('none', 'None', 0), o('some', 'Some', 2), o('average', 'Average', 5), o('high', 'High', 10)] },
+    options: [o('none', 'None', 0), o('some', 'Some', 10), o('average', 'Average', 20), o('high', 'High', 50)] },
+  { id: 'dmApp', card: 'rel', area: 'rel', label: 'Use of DM App', type: 'choice',
+    options: [o('none', 'None', 0), o('some', 'Some', 15), o('plenty', 'Plenty', 30)] },
 
   // Mind & growth
   { id: 'goals', card: 'mind', area: 'mind', label: 'Goals', type: 'choice',
@@ -149,6 +151,10 @@ export const FIELDS = [
     options: [0, 1, 2, 3, 4, 5].map((n) => o(n, String(n))) },
   { id: 'palpitations', card: 'wellbeing', area: null, label: 'Heart palpitations', type: 'choice',
     options: ['none', 'minor', 'medium', 'severe'].map((v) => o(v, v[0].toUpperCase() + v.slice(1))) },
+  { id: 'retraction', card: 'wellbeing', area: null, label: 'Retraction', type: 'choice', scale: true, better: 0,
+    options: [0, 1, 2, 3, 4, 5].map((n) => o(n, String(n))) },
+  { id: 'regularity', card: 'wellbeing', area: null, label: 'Regularity', type: 'choice', scale: true, better: 0,
+    options: [0, 1, 2, 3, 4, 5].map((n) => o(n, String(n))) },
 
   // Night
   { id: 'eveningVitamins', card: 'night', area: 'food', label: 'Evening vitamins', type: 'choice', options: yesno(5, 0) },

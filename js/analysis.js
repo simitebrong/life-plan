@@ -274,7 +274,7 @@ export function habitGrid(days, entries, settings, ctx = makeCtx(settings)) {
 // ---------- patterns ----------
 // Compares an outcome on days with vs without a factor (same day, or the day after).
 // With little data these are possibilities, not conclusions; the strength label says so.
-const OUTCOMES = ['workIntensity', 'workFeeling', 'workHours', 'sleepQuality', 'hoursInBed', 'nightTerrors', 'morningWood', 'outOfBed', 'stress', 'anxiety', 'motivation', 'selfEsteem',
+const OUTCOMES = ['retraction', 'regularity', 'workIntensity', 'workFeeling', 'workHours', 'sleepQuality', 'hoursInBed', 'nightTerrors', 'morningWood', 'outOfBed', 'stress', 'anxiety', 'motivation', 'selfEsteem',
   'wellbeing', 'palpitations', 'ptsd', 'eczema', 'drinkCount', 'firstDrink', 'lastDrink', 'spend', 'workoutScore', 'bedTime', 'intimacy', 'score'];
 const RELATED = [['workStart', 'workHours'], ['workEnd', 'workHours'], ['drinkCount', 'targetAchieved', 'spend'], ['homeWorkout', 'workoutScore', 'morningWorkout', 'middayWorkout'], ['release', 'currentDays'],
   ['bedTime', 'hoursInBed'], ['outOfBed', 'hoursInBed'], ['firstDrink', 'drinkHours'], ['lastDrink', 'drinkHours']];
@@ -289,8 +289,8 @@ const FAM = {
   sleep: ['sleepQuality', 'hoursInBed', 'nightTerrors', 'outOfBed', 'bedTime', 'whichBed', 'snoring', 'morningWood'],
   evening: ['bedTime', 'eveningTreats', 'eveningVitamins', 'bedWithJen', 'dinner', 'lastDrink', 'drinkCount'],
   move: ['workoutScore', 'morningWorkout', 'middayWorkout', 'club', 'otherActivity', 'schoolRuns'],
-  felt: ['stress', 'anxiety', 'motivation', 'selfEsteem', 'ptsd', 'palpitations'],
-  rel: ['intimacy', 'release', 'cage', 'stretcher', 'staminaTraining', 'service', 'bedWithJen', 'kidsTime'],
+  felt: ['stress', 'anxiety', 'motivation', 'selfEsteem', 'ptsd', 'palpitations', 'retraction', 'regularity'],
+  rel: ['intimacy', 'release', 'cage', 'stretcher', 'staminaTraining', 'service', 'dmApp', 'bedWithJen', 'kidsTime'],
   mind: ['social', 'fun', 'visualisation', 'goals', 'duolingo', 'fcProject', 'basil', 'decMH', 'clothes', 'driving'],
   work: ['workDay', 'workStart', 'workEnd', 'workHours', 'workIntensity', 'workFeeling', 'splashDown'],
   ritual: ['ritualMorning', 'ritualNight'],
