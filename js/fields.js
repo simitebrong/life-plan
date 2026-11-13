@@ -225,6 +225,28 @@ export const EXERCISES = [
   { id: 'lyingLegRaises', name: 'Lying leg raises', pts: 2, area: 'lower' },
   { id: 'calfRaises', name: 'Calf raises', pts: 1, area: 'lower' },
   { id: 'sumoCalfRaises', name: 'Sumo squat calf raises', pts: 2, area: 'lower' },
+  // Resistance bands (no anchor point): 2 pts a rep above the waist, 3 for anything lower body.
+  // Counted in their body area, but not needed for the all-exercises bonus.
+  { id: 'bShoulderPress', name: 'Standing shoulder press', pts: 2, area: 'upper', band: true },
+  { id: 'bLateralRaise', name: 'Lateral raise', pts: 2, area: 'upper', band: true },
+  { id: 'bFrontRaise', name: 'Front raise', pts: 2, area: 'upper', band: true },
+  { id: 'bUprightRow', name: 'Upright row', pts: 2, area: 'upper', band: true },
+  { id: 'bPullApart', name: 'Band pull-aparts', pts: 2, area: 'upper', band: true },
+  { id: 'bShrugs', name: 'Band shrugs', pts: 2, area: 'upper', band: true },
+  { id: 'bHighPulls', name: 'High pulls', pts: 2, area: 'upper', band: true },
+  { id: 'bNeckHolds', name: 'Neck isometric holds', pts: 2, area: 'upper', band: true, unit: 'hold' },
+  { id: 'bSideBend', name: 'Overhead side bends', pts: 2, area: 'core', band: true },
+  { id: 'bAntiExtension', name: 'Anti-extension hold', pts: 2, area: 'core', band: true, unit: 'hold' },
+  { id: 'bKneeDrive', name: 'Resisted knee drives', pts: 3, area: 'lower', band: true },
+  { id: 'bCrossKneeDrive', name: 'Cross-body knee drives', pts: 3, area: 'lower', band: true },
+  { id: 'bMarching', name: 'Band-resisted marching', pts: 3, area: 'lower', band: true },
+  { id: 'bSquat', name: 'Band squats', pts: 3, area: 'lower', band: true },
+  { id: 'bSplitSquat', name: 'Split squats', pts: 3, area: 'lower', band: true },
+  { id: 'bReverseLunge', name: 'Reverse lunges', pts: 3, area: 'lower', band: true },
+  { id: 'bRDL', name: 'Romanian deadlifts', pts: 3, area: 'lower', band: true },
+  { id: 'bAbduction', name: 'Standing leg abduction', pts: 3, area: 'lower', band: true },
+  { id: 'bLegExtension', name: 'Standing leg extension', pts: 3, area: 'lower', band: true },
+  { id: 'bHamCurl', name: 'Standing hamstring curl', pts: 3, area: 'lower', band: true },
 ];
 export const EX = Object.fromEntries(EXERCISES.map((e) => [e.id, e]));
 export const EX_GROUPS = [['upper', 'Upper body'], ['core', 'Core'], ['lower', 'Lower body']];
@@ -242,7 +264,7 @@ export function workoutBreakdown(w) {
   const reps = EXERCISES.reduce((s, e) => s + (totals[e.id] || 0) * e.pts, 0);
   const mins = Number(w?.cardio?.mins) || 0; const km = Number(w?.cardio?.km) || 0;
   const cardio = Math.round(mins * CARDIO_PTS.perMin + km * CARDIO_PTS.perKm);
-  const main = EXERCISES.filter((e) => !e.standing);
+  const main = EXERCISES.filter((e) => !e.standing && !e.band);
   const boxes = main.filter((e) => totals[e.id] > 0).length + (mins > 0 || km > 0 ? 1 : 0);
   const boxTotal = main.length + 1;
   const bonus = boxes === boxTotal ? ALL_BOX_BONUS : 0;

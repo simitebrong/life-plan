@@ -431,7 +431,7 @@ function viewWorkout() {
   const row = (e) => {
     const n = w[session]?.[e.id] || 0;
     const otherN = w[other]?.[e.id] || 0;
-    const sec = e.unit === 'sec';
+    const sec = e.unit === 'sec'; const hold = e.unit === 'hold';
     const step1 = sec ? 10 : 5; const step2 = sec ? 30 : 10;
     const lt = lastTime(e.id);
     const earned = (n + otherN) * e.pts;
@@ -439,11 +439,11 @@ function viewWorkout() {
       <div class="ex-head">
         <span class="ex-name">${esc(e.name)}</span>
         <button type="button" class="guide-btn" data-act="guide" data-id="${e.id}" aria-label="How to do ${esc(e.name)}">How to</button>
-        <span class="ex-pts">${earned ? `<strong>+${earned}</strong>` : `${e.pts} pt${e.pts > 1 ? 's' : ''} per ${sec ? 'second' : 'rep'}`}</span>
+        <span class="ex-pts">${earned ? `<strong>+${earned}</strong>` : `${e.pts} pt${e.pts > 1 ? 's' : ''} per ${sec ? 'second' : hold ? 'hold' : 'rep'}`}</span>
       </div>
       <div class="ex-ctrl">
         <button type="button" class="step sm" data-act="ex" data-id="${e.id}" data-n="-${step1}" aria-label="Less">−</button>
-        <label class="ex-val"><input type="number" inputmode="numeric" min="0" data-ex="${e.id}" value="${n || ''}" placeholder="0" aria-label="${esc(e.name)} ${sec ? 'seconds' : 'reps'}"><span>${sec ? 'sec' : 'reps'}</span></label>
+        <label class="ex-val"><input type="number" inputmode="numeric" min="0" data-ex="${e.id}" value="${n || ''}" placeholder="0" aria-label="${esc(e.name)} ${sec ? 'seconds' : 'reps'}"><span>${sec ? 'sec' : hold ? 'holds' : 'reps'}</span></label>
         <button type="button" class="opt slim" data-act="ex" data-id="${e.id}" data-n="${step1}">+${step1}</button>
         <button type="button" class="opt slim" data-act="ex" data-id="${e.id}" data-n="${step2}">+${step2}</button>
       </div>
@@ -477,10 +477,17 @@ function viewWorkout() {
     </div>
 
     ${EX_GROUPS.map(([g, label]) => `<section class="card ex-group" style="--accent:var(--a-move)">
-      <header class="card-head"><h2>${label}</h2><span class="card-meta">${EXERCISES.filter((e) => e.area === g && b.totals[e.id] > 0).length}/${EXERCISES.filter((e) => e.area === g).length}</span></header>
-      ${EXERCISES.filter((e) => e.area === g && !e.standing).map(row).join('')}
+      <header class="card-head"><h2>${label}</h2><span class="card-meta">${EXERCISES.filter((e) => e.area === g && !e.band && b.totals[e.id] > 0).length}/${EXERCISES.filter((e) => e.area === g && !e.band).length}</span></header>
+      ${EXERCISES.filter((e) => e.area === g && !e.standing && !e.band).map(row).join('')}
       ${g === 'core' ? `<div class="group-label standing-label">Standing core <span>no floor needed</span></div>${EXERCISES.filter((e) => e.standing).map(row).join('')}` : ''}
     </section>`).join('')}
+
+    <section class="card ex-group bands" style="--accent:var(--a-move)">
+      <header class="card-head"><h2>Resistance bands</h2><span class="card-meta">${EXERCISES.filter((e) => e.band && b.totals[e.id] > 0).length}/${EXERCISES.filter((e) => e.band).length}</span></header>
+      <p class="card-hint">No anchor needed: stand on the band. 2 points a rep above the waist, 3 for lower body.</p>
+      ${[['upper', 'Upper body'], ['core', 'Core'], ['lower', 'Lower body']].map(([g, label]) => `<div class="group-label standing-label">${label} <span>${g === 'lower' ? '3 pts a rep' : '2 pts a rep'}</span></div>
+        ${EXERCISES.filter((e) => e.band && e.area === g).map(row).join('')}`).join('')}
+    </section>
 
     <section class="card ex-group" style="--accent:var(--a-move)">
       <header class="card-head"><h2>Cardio</h2><span class="card-meta">${b.cardio ? `+${b.cardio}` : '10 per 10 min · 20 per km'}</span></header>
