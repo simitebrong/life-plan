@@ -484,8 +484,8 @@ function viewWorkout() {
 
     <section class="card ex-group bands" style="--accent:var(--a-move)">
       <header class="card-head"><h2>Resistance bands</h2><span class="card-meta">${EXERCISES.filter((e) => e.band && b.totals[e.id] > 0).length}/${EXERCISES.filter((e) => e.band).length}</span></header>
-      <p class="card-hint">No anchor needed: stand on the band. 2 points a rep above the waist, 3 for lower body.</p>
-      ${[['upper', 'Upper body'], ['core', 'Core'], ['lower', 'Lower body']].map(([g, label]) => `<div class="group-label standing-label">${label} <span>${g === 'lower' ? '3 pts a rep' : '2 pts a rep'}</span></div>
+      <p class="card-hint">No anchor needed: stand on the band. 2 points a rep for upper body, 3 for core and lower body.</p>
+      ${[['upper', 'Upper body'], ['core', 'Core'], ['lower', 'Lower body']].map(([g, label]) => `<div class="group-label standing-label">${label} <span>${g === 'upper' ? '2 pts a rep' : '3 pts a rep'}</span></div>
         ${EXERCISES.filter((e) => e.band && e.area === g).map(row).join('')}`).join('')}
     </section>
 

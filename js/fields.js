@@ -225,7 +225,7 @@ export const EXERCISES = [
   { id: 'lyingLegRaises', name: 'Lying leg raises', pts: 2, area: 'lower' },
   { id: 'calfRaises', name: 'Calf raises', pts: 1, area: 'lower' },
   { id: 'sumoCalfRaises', name: 'Sumo squat calf raises', pts: 2, area: 'lower' },
-  // Resistance bands (no anchor point): 2 pts a rep above the waist, 3 for anything lower body.
+  // Resistance bands (no anchor point): 2 pts a rep for upper body, 3 for core and lower body.
   // Counted in their body area, but not needed for the all-exercises bonus.
   { id: 'bShoulderPress', name: 'Standing shoulder press', pts: 2, area: 'upper', band: true },
   { id: 'bLateralRaise', name: 'Lateral raise', pts: 2, area: 'upper', band: true },
@@ -235,8 +235,8 @@ export const EXERCISES = [
   { id: 'bShrugs', name: 'Band shrugs', pts: 2, area: 'upper', band: true },
   { id: 'bHighPulls', name: 'High pulls', pts: 2, area: 'upper', band: true },
   { id: 'bNeckHolds', name: 'Neck isometric holds', pts: 2, area: 'upper', band: true, unit: 'hold' },
-  { id: 'bSideBend', name: 'Overhead side bends', pts: 2, area: 'core', band: true },
-  { id: 'bAntiExtension', name: 'Anti-extension hold', pts: 2, area: 'core', band: true, unit: 'hold' },
+  { id: 'bSideBend', name: 'Overhead side bends', pts: 3, area: 'core', band: true },
+  { id: 'bAntiExtension', name: 'Anti-extension hold', pts: 3, area: 'core', band: true, unit: 'hold' },
   { id: 'bKneeDrive', name: 'Resisted knee drives', pts: 3, area: 'lower', band: true },
   { id: 'bCrossKneeDrive', name: 'Cross-body knee drives', pts: 3, area: 'lower', band: true },
   { id: 'bMarching', name: 'Band-resisted marching', pts: 3, area: 'lower', band: true },
