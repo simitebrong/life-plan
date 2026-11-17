@@ -9,6 +9,7 @@ import { SEED_GOALS, CATEGORIES } from './goals-seed.js';
 import { createLibrary } from './library.js';
 import { createProgress } from './progress.js';
 import { createRitual } from './ritual.js';
+import { createHearth } from './hearth.js';
 
 const sb = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { auth: { persistSession: true, autoRefreshToken: true } });
 const $app = document.getElementById('app');
@@ -254,7 +255,7 @@ function fieldRow(f, d) {
   if (f.type === 'ritual') return `<div class="field done ritual" data-field="${f.id}">${control(f, d)}</div>`;
   return `<div class="field${done ? ' done' : ''}" data-field="${f.id}">
     <div class="field-head"><span class="field-label">${esc(f.label)}</span>${p != null && p !== 0 && f.type !== 'auto' ? `<span class="pts ${p > 0 ? 'pos' : 'neg'}">${p > 0 ? '+' : ''}${p}</span>` : ''}</div>
-    ${control(f, d)}
+    ${control(f, d)}${f.id === 'staminaTraining' ? hearth.entry() : ''}
   </div>`;
 }
 
@@ -846,6 +847,12 @@ const prog = createProgress({
   openDay: (day) => { S.view = 'today'; S.day = day; render(); window.scrollTo(0, 0); },
 });
 prog.init($app);
+const hearth = createHearth({
+  sb, esc, render: () => render(),
+  getOutcome: () => entry().staminaTraining || null,
+  setOutcome: (v) => setValue('staminaTraining', v),
+  dayLabel: () => (S.day === todayIso() ? 'today' : fmtShort(S.day)),
+});
 const ritual = createRitual({
   S, sb, esc, render: () => render(),
   isDone: (kind) => entry()[kind === 'morning' ? 'ritualMorning' : 'ritualNight'] === 'yes',
@@ -869,7 +876,7 @@ function render() {
       <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${COG}</svg></button>
     <nav class="tabbar" aria-label="Sections">${TABS.map(([id, label, icon]) => `<button type="button" class="tab${S.view === id ? ' on' : ''}" data-act="tab" data-v="${id}" aria-current="${S.view === id ? 'page' : 'false'}">
       <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${icon}</svg><span>${label}</span></button>`).join('')}</nav>`}
-    ${S.sheet ? sheetHTML() : ''}${S.celebrate ? celebrateSheet() : ''}${S.guide ? guideSheet() : ''}${ritual.overlay()}`;
+    ${S.sheet ? sheetHTML() : ''}${S.celebrate ? celebrateSheet() : ''}${S.guide ? guideSheet() : ''}${ritual.overlay()}${hearth.overlay()}`;
   window.scrollTo(0, y);
   if (ritY != null) { const r = document.querySelector('.rit'); if (r) r.scrollTop = ritY; }
   setSaveState(S.saveState);
@@ -898,6 +905,7 @@ $app.addEventListener('click', async (e) => {
   if (await lib.onClick(act, el)) return;
   if (await prog.onClick(act, el)) return;
   if (ritual.onClick(act, el)) return;
+  if (hearth.onClick(act, el)) return;
   const fid = el.dataset.f;
   const d = entry();
   switch (act) {
@@ -1078,6 +1086,7 @@ $app.addEventListener('change', async (e) => {
   if (await lib.onChange(el)) return;
   if (prog.onChange(el)) return;
   if (ritual.onChange(el)) return;
+  if (hearth.onChange(el)) return;
   if (el.matches('.date-pick')) { if (el.value && el.value <= todayIso()) { S.day = el.value; render(); } return; }
   if (el.dataset.gfield) {
     const g = S.goals.find((x) => x.id === S.goalOpen);

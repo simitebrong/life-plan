@@ -801,3 +801,53 @@ body.rit-open .tabbar, body.rit-open .cog { display: none; }
 .rit-pics { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 18px; }
 button.rit-change { background: none; border: 0; padding: 0; font: inherit; }
 @media (max-width: 370px) { .rit-var { font-size: 15px; } .rit-var small { font-size: 9.5px; } }
+
+/* ---------- Hearth (stamina training) ---------- */
+.hearth-entry {
+  display: flex; align-items: center; gap: 12px; width: 100%; margin: 10px 0 2px; padding: 11px 14px; border: 0; border-radius: 14px; text-align: left; min-height: 56px;
+  background: linear-gradient(120deg, #3A1420, #5A1E2C 60%, #6E2A2A); color: #F6E1D2;
+}
+.hearth-ic { width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; background: rgb(240 150 110 / 0.18); color: #F2A57E; flex: none; }
+.hearth-entry .rit-entry-t small { color: #D9B6A4; }
+.hearth-entry .rit-entry-go { color: #F2A57E; }
+.rit.hearth {
+  color: #F6E6DA;
+  background:
+    radial-gradient(90% 55% at 50% 0%, #6B2230 0%, transparent 70%),
+    radial-gradient(70% 40% at 50% 100%, #4A1420 0%, transparent 70%),
+    linear-gradient(180deg, #24090F 0%, #160509 100%);
+}
+.hearth .rit-kicker { color: #F2A57E; }
+.hearth .rit-intent { color: #FBEDE3; }
+.hearth .rit-begin { background: #E8956E; color: #2A0B12; }
+.hearth .rit-begin.ghost { background: transparent; color: #F2A57E; border-color: rgb(242 165 126 / 0.5); }
+.hearth .rit-ring-p { stroke: #E8956E; }
+.hearth .rit-breath { background: radial-gradient(circle, rgb(232 149 110 / 0.4), rgb(232 149 110 / 0.08) 70%); }
+.hearth .rit-phase { color: #F2A57E; }
+.hearth .rit-steps button { background: rgb(255 220 200 / 0.05); }
+.hearth .rit-st span { color: #E2C6B6; }
+.hearth .rit-ctrl button { border-color: rgb(242 165 126 / 0.4); color: #F6E6DA; }
+.hearth .rit-ctrl .rit-pp { background: rgb(232 149 110 / 0.16); }
+.hearth .rit-upload { background: #E8956E; color: #2A0B12; }
+.hearth .rit-change { color: #D9B6A4; }
+.hearth .rit-change.warn { color: #F2A57E; font-weight: 700; }
+.hearth-n { width: 26px; height: 26px; flex: none; border-radius: 50%; border: 1px solid rgb(242 165 126 / 0.6); color: #F2A57E; display: grid; place-items: center; font-size: 13px; font-weight: 700; }
+.hearth-gal { position: relative; width: min(100%, 380px); margin: 0 auto; border-radius: 18px; overflow: hidden;
+  box-shadow: 0 0 0 1px rgb(242 165 126 / 0.35), 0 20px 60px rgb(0 0 0 / 0.55), 0 0 90px rgb(232 110 90 / 0.18); }
+.hearth-gal.small { width: min(70%, 260px); }
+.hearth-gal.empty { display: grid; place-items: center; gap: 12px; aspect-ratio: 3 / 4; padding: 24px; background: rgb(255 220 200 / 0.04); color: #E2C6B6; font-size: 15px; }
+.hearth-photo { display: block; width: 100%; padding: 0; border: 0; background: #000; position: relative; }
+.hearth-photo img { display: block; width: 100%; max-height: 64vh; object-fit: cover; transition: filter 0.35s ease; }
+.hearth-gal.small .hearth-photo img { max-height: 34vh; }
+.hearth-gal.veiled .hearth-photo img { filter: blur(28px) brightness(0.55) saturate(1.2); transform: scale(1.08); }
+.hearth-veil { position: absolute; inset: 0; display: grid; place-items: center; font-family: 'Cormorant Garamond', Georgia, serif; font-style: italic; font-size: 22px; color: #FBEDE3; }
+.hearth-nav { position: absolute; top: 50%; transform: translateY(-50%); width: 44px; height: 44px; border-radius: 50%; border: 0; background: rgb(22 5 9 / 0.55); color: #FBEDE3; font-size: 26px; }
+.hearth-nav.prev { left: 8px; } .hearth-nav.next { right: 8px; }
+.hearth-count { position: absolute; bottom: 8px; right: 10px; font-size: 12px; font-weight: 700; color: #FBEDE3; background: rgb(22 5 9 / 0.55); padding: 2px 8px; border-radius: 999px; }
+.hearth-q { font-weight: 700; margin: 6px 0 8px; }
+.hearth-out { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 8px; }
+.hearth-out button { display: flex; flex-direction: column; gap: 3px; align-items: center; padding: 12px 6px; border-radius: 14px; border: 1px solid rgb(242 165 126 / 0.4);
+  background: rgb(255 220 200 / 0.05); color: #F6E6DA; font-weight: 700; font-size: 15px; min-height: 64px; }
+.hearth-out button small { font-weight: 500; font-size: 11.5px; color: #D9B6A4; }
+.hearth-out button.on { background: #E8956E; border-color: #E8956E; color: #2A0B12; }
+.hearth-out button.on small { color: #4A1A12; }
