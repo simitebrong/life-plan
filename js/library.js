@@ -404,6 +404,7 @@ export function createLibrary(api) {
     const cont = continueItem(false);
     return `<section class="page">
       <h1>Library</h1>
+      ${api.playgroundEntry ? api.playgroundEntry() : ''}
       ${cont && cont.progress?.ts ? `<button type="button" class="basil-card" data-act="l-read" data-id="${cont.id}">
         <span class="bc-k">Continue reading</span><span class="bc-t">${esc(cont.title)}</span>
         <span class="bc-s">${cont.progress.pct}% through</span><span class="bc-bar"><span style="width:${cont.progress.pct}%"></span></span><span class="bc-go" aria-hidden="true">›</span></button>` : ''}

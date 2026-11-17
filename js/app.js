@@ -10,6 +10,7 @@ import { createLibrary } from './library.js';
 import { createProgress } from './progress.js';
 import { createRitual } from './ritual.js';
 import { createHearth } from './hearth.js';
+import { createPlayground } from './playground.js';
 
 const sb = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { auth: { persistSession: true, autoRefreshToken: true } });
 const $app = document.getElementById('app');
@@ -837,6 +838,7 @@ const TABS = [
 ];
 lib = createLibrary({
   S, sb, store, esc, todayIso,
+  playgroundEntry: () => playground.entry(),
   render: () => render(),
   entryFor: (day, peek) => (peek ? S.entries[day] : (S.entries[day] ||= {})),
   queueSave: (day) => queueSave(day),
@@ -852,6 +854,10 @@ const hearth = createHearth({
   getOutcome: () => entry().staminaTraining || null,
   setOutcome: (v) => setValue('staminaTraining', v),
   dayLabel: () => (S.day === todayIso() ? 'today' : fmtShort(S.day)),
+});
+const playground = createPlayground({
+  sb, esc, render: () => render(),
+  openStory: (id) => lib.onClick('l-read', { dataset: { id } }),
 });
 const ritual = createRitual({
   S, sb, esc, render: () => render(),
@@ -869,6 +875,7 @@ function render() {
   if (!S.session) { $app.innerHTML = viewAuth(S.authMsg); return; }
   const y = window.scrollY;
   const ritY = document.querySelector('.rit')?.scrollTop;
+  const pgY = document.querySelector('.pg')?.scrollTop;
   const views = { today: viewToday, workout: viewWorkout, library: () => lib.view(), progress: viewProgress, goals: viewGoals, settings: viewSettings };
   const immersive = S.view === 'library' && lib.immersive();
   $app.innerHTML = `<main class="view view-${S.view}${immersive ? ' immersive' : ''}">${views[S.view]()}</main>
@@ -876,9 +883,10 @@ function render() {
       <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${COG}</svg></button>
     <nav class="tabbar" aria-label="Sections">${TABS.map(([id, label, icon]) => `<button type="button" class="tab${S.view === id ? ' on' : ''}" data-act="tab" data-v="${id}" aria-current="${S.view === id ? 'page' : 'false'}">
       <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${icon}</svg><span>${label}</span></button>`).join('')}</nav>`}
-    ${S.sheet ? sheetHTML() : ''}${S.celebrate ? celebrateSheet() : ''}${S.guide ? guideSheet() : ''}${ritual.overlay()}${hearth.overlay()}`;
+    ${S.sheet ? sheetHTML() : ''}${S.celebrate ? celebrateSheet() : ''}${S.guide ? guideSheet() : ''}${ritual.overlay()}${hearth.overlay()}${playground.overlay()}`;
   window.scrollTo(0, y);
   if (ritY != null) { const r = document.querySelector('.rit'); if (r) r.scrollTop = ritY; }
+  if (pgY != null) { const r = document.querySelector('.pg'); if (r) r.scrollTop = pgY; }
   setSaveState(S.saveState);
   if (immersive) document.body.dataset.rt = store.get('lp-reader', {}).theme || 'auto'; else delete document.body.dataset.rt;
   lib.afterRender();
@@ -902,6 +910,7 @@ $app.addEventListener('click', async (e) => {
   const el = e.target.closest('[data-act]');
   if (!el) return;
   const act = el.dataset.act;
+  if (playground.onClick(act, el)) return;
   if (await lib.onClick(act, el)) return;
   if (await prog.onClick(act, el)) return;
   if (ritual.onClick(act, el)) return;
@@ -1083,6 +1092,7 @@ $app.addEventListener('click', async (e) => {
 
 $app.addEventListener('change', async (e) => {
   const el = e.target;
+  if (playground.onChange(el)) return;
   if (await lib.onChange(el)) return;
   if (prog.onChange(el)) return;
   if (ritual.onChange(el)) return;
