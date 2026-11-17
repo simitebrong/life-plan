@@ -789,3 +789,15 @@ body.rit-open .tabbar, body.rit-open .cog { display: none; }
 .gap-adj { display: flex; align-items: center; gap: 8px; font-size: 14.5px; color: var(--ink-2); }
 .gap-adj b { color: var(--ink); min-width: 56px; text-align: center; font-variant-numeric: tabular-nums; }
 @media (prefers-reduced-motion: reduce) { .pr-p { transition: none; } }
+
+/* ritual variants */
+.rit-vars { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin: 0 0 16px; }
+.rit-var { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 9px 4px; min-height: 58px; border-radius: 12px;
+  border: 1px solid rgb(232 200 140 / 0.3); background: rgb(255 255 255 / 0.04); color: #F3E9D6;
+  font-family: 'Cormorant Garamond', Georgia, serif; font-size: 17px; font-weight: 600; line-height: 1.1; }
+.rit-var small { font-family: var(--body); font-size: 10.5px; font-weight: 600; color: #B9AC95; line-height: 1.2; text-align: center; }
+.rit-var.on { background: #E8C88C; border-color: #E8C88C; color: #2A1F35; }
+.rit-var.on small { color: #4A3A2A; }
+.rit-pics { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 18px; }
+button.rit-change { background: none; border: 0; padding: 0; font: inherit; }
+@media (max-width: 370px) { .rit-var { font-size: 15px; } .rit-var small { font-size: 9.5px; } }

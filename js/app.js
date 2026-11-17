@@ -229,7 +229,7 @@ function control(f, d) {
       return `<div class="auto"><span class="big">${val}</span><span class="micro">${d.release ? (d.release === 'yes' ? 'Counter resets today' : 'Counted automatically') : 'Fills in when you answer Release'}</span></div>`;
     }
     case 'ritual':
-      return ritual.entry(f.kind, d[f.id] === 'yes');
+      return ritual.entry(f.kind, d[f.id] === 'yes', d[`${f.id}Style`]);
     case 'pacing':
       return pacingHTML(d);
     case 'text':
@@ -849,7 +849,11 @@ prog.init($app);
 const ritual = createRitual({
   S, sb, esc, render: () => render(),
   isDone: (kind) => entry()[kind === 'morning' ? 'ritualMorning' : 'ritualNight'] === 'yes',
-  setDone: (kind, on) => setValue(kind === 'morning' ? 'ritualMorning' : 'ritualNight', on ? 'yes' : null),
+  setDone: (kind, on, style) => {
+    const fid = kind === 'morning' ? 'ritualMorning' : 'ritualNight'; const d = entry();
+    if (on && style) d[`${fid}Style`] = style; else delete d[`${fid}Style`];
+    setValue(fid, on ? 'yes' : null);
+  },
   dayLabel: () => (S.day === todayIso() ? 'today' : fmtShort(S.day)),
 });
 const COG = '<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1 7 17M17 7l2.1-2.1"/>';

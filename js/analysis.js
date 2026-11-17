@@ -514,7 +514,7 @@ export function nextDrinkStep(day, settings) {
   return next ? { from: next.from, target: next.target, daysAway: dayDiff(day, next.from) } : null;
 }
 
-const KEEP_RAW = FIELDS.map((f) => f.id).concat(['workOff', 'workoutScore', 'readSecs', 'basilReadSecs', 'done', 'workout']);
+const KEEP_RAW = FIELDS.map((f) => f.id).concat(['ritualMorningStyle', 'ritualNightStyle', 'workOff', 'workoutScore', 'readSecs', 'basilReadSecs', 'done', 'workout']);
 export function weeklySummary(entries, settings, wkStart, extra = {}) {
   const ctx = makeCtx(settings);
   const days = daysBetween(wkStart, addDays(wkStart, 6));

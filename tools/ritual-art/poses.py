@@ -60,6 +60,21 @@ def poses():
                        under='<rect x="112" y="64" width="9" height="140" rx="3" fill="#2A3A66" stroke="#C9A96C" stroke-opacity=".5"/>')
     P['n-rest'] = dict(pose=dict(view='side', hip=(110, FLOOR - 14), torso=-90, face=-180, legs={'near': ('a', 90, 90), 'far': ('a', 91, 91)},
                                  arms={'near': ('a', 86, 90), 'far': ('a', 88, 90)}, feet={'near': 170, 'far': 170}))
+    # lotus, seen from the front: knees wide, shins crossed, sitting tall
+    lot_hip = (110, FLOOR - 22)
+    lotus_legs = {'near': ('a', 74, -78), 'far': ('a', -74, 78)}
+    knee_n = add(lot_hip, vec(74, TH)); knee_f = add(lot_hip, vec(-74, TH))
+    P['lotus'] = dict(pose=front(hip=lot_hip, legs=lotus_legs, feet={'near': -90, 'far': 90},
+                                 arms={'near': ('t', (knee_n[0] - 2, knee_n[1] - 6), -1), 'far': ('t', (knee_f[0] + 2, knee_f[1] - 6), 1)}),
+                      over=glow(110, lot_hip[1] - 70, 15))
+    P['lotus-heart'] = dict(pose=front(hip=lot_hip, legs=lotus_legs, feet={'near': -90, 'far': 90}, arms=heart_hands(lot_hip)),
+                            over=glow(110, lot_hip[1] - 34, 18))
+    P['kneel-heart'] = dict(pose=kneel(arms={'near': ('t', (104, 150), 1), 'far': ('t', (101, 150), 1)}), over=glow(102, 148, 16))
+    br_hip = (112, 160)
+    P['bridge'] = dict(pose=dict(view='side', hip=br_hip, torso=-62, face=-150,
+                                 legs={'near': ('a', 110, 0), 'far': ('a', 106, 2)},
+                                 arms={'near': ('a', 92, 90), 'far': ('a', 94, 90)}, feet={'near': 90, 'far': 90}),
+                       over=F.arrow(112, 186, 112, 150))
     return P
 
 def backdrop(seed):
