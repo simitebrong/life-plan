@@ -4,8 +4,8 @@ import webpush from "npm:web-push@3.6.7";
 // The same analysis code the app's Progress screen runs, pinned to a commit of this repo and
 // bundled at deploy time, so the review's numbers match the charts. After changing js/analysis.js
 // or js/fields.js: push, update the commit below, redeploy.
-import { weeklySummary, weekStart, addDays } from "https://esm.sh/gh/simitebrong/life-plan@e1e1eec184cf64079e705797d794a6af18c45ae9/js/analysis.js";
-import { FIELDS } from "https://esm.sh/gh/simitebrong/life-plan@e1e1eec184cf64079e705797d794a6af18c45ae9/js/fields.js";
+import { weeklySummary, weekStart, addDays } from "https://esm.sh/gh/simitebrong/life-plan@69d40914a55be3c15bab1c96eadc693a30b0b9cc/js/analysis.js";
+import { FIELDS } from "https://esm.sh/gh/simitebrong/life-plan@69d40914a55be3c15bab1c96eadc693a30b0b9cc/js/fields.js";
 
 // Life Plan weekly review.
 // Cron mode (x-cron-secret): every 15 min on Sundays; writes the review at the user's chosen time and sends a push.
@@ -42,7 +42,7 @@ const GLOSSARY = FIELDS.map((f: any) => {
 workout: home workout reps by session {morning:{exercise:reps}, midday:{...}, cardio:{mins,km}}; workoutScore = points; workoutTarget = that day's target
 readSecs / basilReadSecs: seconds spent reading in the app's library (Basil = his own stories)
 done: he tapped "Finish my day"
-ritualMorning / ritualNight: "yes" = he completed that grounding ritual (breath, stretches, kneeling stillness before his wife's picture); each adds 75 points. Celebrate them; never treat a missed one as a failure.
+ritualMorning / ritualNight: "yes" = he completed that grounding ritual (breath, stretches, kneeling stillness before his wife's picture); each adds 75 points. ritualMorningStyle / ritualNightStyle say which version he chose: rise/settle = standard, offering/vigil = openly devotional, steady/soft = the gentler reconnecting one used after friction between them, kindle/velvet = warmth and desire. Celebrate them; never treat a missed one as a failure. If he chose a reconnecting one, acknowledge the effort to repair kindly and without prying.
 drinkPacing: each drink he logged that day with its clock time, the minimum gap he'd set (gapTarget, minutes; he raises it in 5-minute steps over time), minutes since the previous drink, and paced=true when he waited the full gap (+10 points each). Slower pacing is the goal: celebrate paced drinks and longer average gaps.
 retraction / regularity: personal symptom readings 0-5 (regularity = bowel movements), recorded for insight only; mention matter-of-factly if a link stands out, never diagnose.
 dmApp: how much he used his devotion/marriage support app that day.
