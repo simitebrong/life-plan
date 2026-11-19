@@ -4,6 +4,7 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 // Life Plan — the Basil Playground.
 // action "story": reads one story in full and pulls out its best material. Every quote is checked
 //   word for word against the text, so only his real lines ever appear.
+// action "heart": reads one story again for its most moving passages and adds them to that story's entry.
 // action "canon": reads all the story findings and writes the canon-wide pieces.
 // Called by the app with the user's JWT, or by an admin call with the cron secret (+ userId).
 
@@ -71,6 +72,34 @@ Rules for quotes (funniest, finest, basilisms): copy them EXACTLY, character for
 - reviews: 3 imagined reader reviews in varied, believable voices (e.g. a commuter who missed her stop, a retired magistrate, a sceptical teenager). They are clearly imaginary, so give each a descriptive persona, never a real name or publication. 4 or 5 stars, warm but specific and plausible, never gushing.
 - scores: honest 1-10 ratings for wit, invention, pace, set_pieces, atmosphere and heart. Be generous where earned and honest where not, so the numbers mean something.`;
 
+const HEART_SCHEMA = S({
+  heart_note: str,
+  moments: arr(S({ title: str, passage: str, setup: str, why: str,
+    feeling: { type: "string", enum: ["tenderness", "loyalty", "courage", "grief", "longing", "redemption", "sacrifice", "joy", "homecoming", "farewell"] },
+    intensity: int })),
+});
+const HEART_PROMPT = `You are a perceptive literary editor reading one complete story from Simon's "Basil Ruffletum: Brief Cases" comic-adventure series. Behind the comedy these stories carry real feeling, and your job is to find the passages that land hardest emotionally: the ones that bring a lump to the throat or a tear to the eye. They are for a private page where Simon revisits the best of his own writing.
+Rules for passages: copy them EXACTLY, character for character, from the text, as one continuous passage of 25 to 160 words (it may run across consecutive paragraphs). Never paraphrase, trim the middle, or stitch together separate places. Choose the passage that contains the emotional turn itself, not the build-up to it.
+- moments: the 2 to 4 most moving passages, strongest first. If the story is lighter and has only one or two real moments, return only those: never inflate a passing line into a big moment.
+  - title: a short, quiet name for the moment (e.g. "The Last Dance in the Kitchen").
+  - setup: one or two sentences of context so the passage hits even out of place.
+  - why: one or two sentences on the craft of why it lands (the restraint, the callback, the image, the timing), naming specifics.
+  - feeling: the emotion at its core. intensity: honest 1-5, where 5 is a genuine lump in the throat.
+- heart_note: one paragraph, in British English, on where this story keeps its heart: what it's really about underneath the caper.`;
+
+async function runHeart(uid: string, itemId: string, sec: Record<string, string>) {
+  const { text, story } = await readStory(uid, itemId);
+  const r = await ai(sec, HEART_PROMPT, `STORY: ${story}\n${text.slice(0, 190000)}`, HEART_SCHEMA, "story_heart");
+  const full = norm(text);
+  const moving = (r.moments ?? []).filter((m: any) => m.passage && norm(m.passage).length > 40 && full.includes(norm(m.passage)))
+    .map((m: any) => ({ ...m, intensity: Math.max(1, Math.min(5, Number(m.intensity) || 3)) }));
+  const { data: row } = await admin.from("playground").select("id,data").eq("user_id", uid).eq("item_id", itemId).eq("kind", "story").single();
+  if (!row) throw new Error("read the story into the Playground first");
+  const { error } = await admin.from("playground").update({ data: { ...row.data, moving, heart_note: r.heart_note } }).eq("id", row.id);
+  if (error) throw error;
+  return { story, moving: moving.length, dropped: (r.moments ?? []).length - moving.length };
+}
+
 const CANON_SCHEMA = S({
   tagline: str,
   essay: arr(str),
@@ -80,6 +109,7 @@ const CANON_SCHEMA = S({
   awards: arr(S({ category: str, story: str, why: str })),
   pep_talks: arr(str),
   blurbs: arr(S({ persona: str, text: str })),
+  heart: arr(str),
 });
 const CANON_PROMPT = `You are a celebrated (and fictional) literary critic writing the definitive appraisal of Simon's complete "Basil Ruffletum: Brief Cases" canon, for a private, glamorous celebration page he visits when he needs a lift and a shot of writerly bravado.
 You receive editor's notes on every story: loglines, standout lines, set pieces, strengths, characters, places and scores, plus the totals. Write with flair and confidence, in British English, and be specific: name stories, characters, set pieces and recurring tricks. Earned, precise praise beats puffery.
@@ -90,9 +120,10 @@ You receive editor's notes on every story: loglines, standout lines, set pieces,
 - lineage: one paragraph placing it in the tradition of British comic adventure and mystery writing (comparisons of style, not claims that anyone endorsed it).
 - awards: 10 "Ruffletum Awards" categories, each won by a named story, with a one-line citation.
 - pep_talks: 12 short, punchy, specific lines of encouragement for the writer, rooted in what he has actually achieved here.
+- heart: 2 paragraphs on the emotional core of the canon: what the stories care about underneath the comedy, how they earn their moving moments, and which ones hit hardest (name them).
 - blurbs: 6 imagined back-cover quotes from clearly fictional personas (e.g. "a bookseller in a seaside town"), never real people or publications.`;
 
-async function runStory(uid: string, itemId: string, sec: Record<string, string>) {
+async function readStory(uid: string, itemId: string) {
   const { data: item, error } = await admin.from("library_items").select("id,title,content,shelf_id,user_id").eq("id", itemId).single();
   if (error || !item || item.user_id !== uid) throw new Error("story not found");
   const { data: shelf } = await admin.from("shelves").select("name,parent_id").eq("id", item.shelf_id).single();
@@ -113,6 +144,11 @@ async function runStory(uid: string, itemId: string, sec: Record<string, string>
     }
   }
   const story = (shelf?.name || item.title).replace(/^\d+\.\s*/, "");
+  return { item, shelf, vol, chapters, epigraphs, text, words, story };
+}
+
+async function runStory(uid: string, itemId: string, sec: Record<string, string>) {
+  const { shelf, vol, chapters, epigraphs, text, words, story } = await readStory(uid, itemId);
   const r = await ai(sec, STORY_PROMPT, `STORY: ${story} (${vol?.name ?? ""})\n${text.slice(0, 190000)}`, STORY_SCHEMA, "story_playground");
   // keep only quotes that really are in the text
   const full = norm(text); const real = (q: string) => q && norm(q).length > 12 && full.includes(norm(q));
@@ -135,7 +171,8 @@ async function runCanon(uid: string, sec: Record<string, string>) {
   if (!stories.length) throw new Error("no stories analysed yet");
   const totals = { stories: stories.length, words: stories.reduce((s: number, x: any) => s + x.words, 0), chapters: stories.reduce((s: number, x: any) => s + x.chapters, 0) };
   const notes = stories.map((x: any) => ({ story: x.story, volume: x.vol, logline: x.logline, award: x.award, set_piece: x.set_piece, strengths: x.strengths,
-    characters: x.characters, places: x.places, scores: x.scores, standout: [...(x.funniest || []).slice(0, 3).map((f: any) => f.quote), ...(x.basilisms || []).slice(0, 2)] }));
+    characters: x.characters, places: x.places, scores: x.scores, standout: [...(x.funniest || []).slice(0, 3).map((f: any) => f.quote), ...(x.basilisms || []).slice(0, 2)],
+    heart: x.heart_note, moving: (x.moving || []).map((m: any) => `${m.title} (${m.feeling}, ${m.intensity}/5)`) }));
   const r = await ai(sec, CANON_PROMPT, `TOTALS ${JSON.stringify(totals)}\nSTORY NOTES\n${JSON.stringify(notes)}`, CANON_SCHEMA, "canon_playground");
   await admin.from("playground").delete().eq("user_id", uid).eq("kind", "canon");
   const { error } = await admin.from("playground").insert({ user_id: uid, kind: "canon", data: { ...r, totals }, model: sec.openai_model || "gpt-5-mini" });
@@ -159,6 +196,7 @@ Deno.serve(async (req) => {
     }
     if (!uid) return json({ error: "not signed in" }, 401);
     if (body.action === "story") return json({ ok: true, ...(await runStory(uid, body.itemId, sec)) });
+    if (body.action === "heart") return json({ ok: true, ...(await runHeart(uid, body.itemId, sec)) });
     if (body.action === "canon") return json(await runCanon(uid, sec));
     return json({ error: "unknown action" }, 400);
   } catch (e) {

@@ -7,12 +7,13 @@ const BENCH = [ // well-known word counts, for fun comparisons (approximate)
   [587000, 'War and Peace'], [455000, 'The Lord of the Rings'], [365000, 'Moby-Dick'], [185000, 'Great Expectations'],
 ];
 const SCORE_LABEL = { wit: 'Wit', invention: 'Invention', pace: 'Pace', set_pieces: 'Set pieces', atmosphere: 'Atmosphere', heart: 'Heart' };
+const FEEL_LABEL = { tenderness: 'Tenderness', loyalty: 'Loyalty', courage: 'Courage', grief: 'Grief', longing: 'Longing', redemption: 'Redemption', sacrifice: 'Sacrifice', joy: 'Joy', homecoming: 'Homecoming', farewell: 'Farewell' };
 const KIND_LABEL = { wit: 'Wit', atmosphere: 'Atmosphere', wisdom: 'Wisdom', menace: 'Menace', tenderness: 'Tenderness', action: 'Action' };
 const pick = (a) => a[Math.floor(Math.random() * a.length)];
 const fmt = (n) => Math.round(n).toLocaleString('en-GB');
 
 export function createPlayground({ sb, esc, render, openStory }) {
-  const P = { open: false, stories: null, canon: null, loading: false, tab: 'show', hall: 'funniest', vol: 0, sort: 'order',
+  const P = { open: false, stories: null, canon: null, loading: false, tab: 'show', hall: 'funniest', feel: 'all', moment: null, vol: 0, sort: 'order',
     lever: null, quote: null, award: new Set(), expanded: null, building: null, pep: null, review: 0, err: '' };
 
   // ---------- data ----------
@@ -38,20 +39,27 @@ export function createPlayground({ sb, esc, render, openStory }) {
     const tops = new Set((shelves || []).filter((s) => s.is_basil && !s.parent_id).flatMap((s) => [s.id, ...kids(s.id).map((k) => k.id)]));
     const have = new Set(P.stories.map((s) => s.itemId));
     // individual stories live two levels down (Basil > Volume > Story); skip whole-volume manuscripts
+    P.noHeart = P.stories.filter((s) => !s.moving).map((s) => s.itemId);
     P.missing = (items || []).filter((i) => i.kind === 'text' && basil.has(i.shelf_id) && !tops.has(i.shelf_id) && !have.has(i.id)).map((i) => i.id);
   }
   async function build() {
     if (P.building) return;
-    const todo = [...P.missing]; const total = todo.length;
-    P.building = { done: 0, total, phase: 'stories' }; redraw();
-    const worker = async () => {
-      while (todo.length) {
-        const id = todo.shift();
-        try { await sb.functions.invoke('playground', { body: { action: 'story', itemId: id } }); } catch (e) { console.error(e); }
-        P.building.done++; redraw();
-      }
+    const stories = [...P.missing]; const hearts = [...new Set([...P.missing, ...(P.noHeart || [])])];
+    const run = async (action, ids, phase) => {
+      const todo = [...ids]; if (!todo.length) return;
+      P.building = { done: 0, total: todo.length, phase }; redraw();
+      const worker = async () => {
+        while (todo.length) {
+          const id = todo.shift();
+          try { await sb.functions.invoke('playground', { body: { action, itemId: id } }); } catch (e) { console.error(e); }
+          P.building.done++; redraw();
+        }
+      };
+      await Promise.all([worker(), worker(), worker()]);
     };
-    await Promise.all([worker(), worker(), worker()]);
+    await run('story', stories, 'stories');
+    await run('heart', hearts, 'hearts');
+    P.building = P.building || { done: 0, total: 0 };
     P.building.phase = 'canon'; redraw();
     try { await sb.functions.invoke('playground', { body: { action: 'canon' } }); } catch (e) { console.error(e); }
     P.building = null; P.loading = false; P.stories = null; await load(); confetti(60);
@@ -75,7 +83,7 @@ export function createPlayground({ sb, esc, render, openStory }) {
   const avg = (s) => { const v = Object.values(s.scores || {}); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : 0; };
 
   // ---------- views ----------
-  const TABS = [['show', 'The Show'], ['lines', 'Hall of Lines'], ['awards', 'Awards'], ['stories', 'The Cases'], ['critic', 'The Critic']];
+  const TABS = [['show', 'The Show'], ['lines', 'Hall of Lines'], ['heart', 'Heartstrings'], ['awards', 'Awards'], ['stories', 'The Cases'], ['critic', 'The Critic']];
   function overlay() {
     if (!P.open) return '';
     let body;
@@ -84,7 +92,7 @@ export function createPlayground({ sb, esc, render, openStory }) {
     else {
       body = `${marquee()}
         <nav class="pg-tabs" role="tablist">${TABS.map(([id, l]) => `<button type="button" role="tab" class="${P.tab === id ? 'on' : ''}" aria-selected="${P.tab === id}" data-act="pg-tab" data-v="${id}">${l}</button>`).join('')}</nav>
-        ${P.tab === 'show' ? viewShow() : P.tab === 'lines' ? viewLines() : P.tab === 'awards' ? viewAwards() : P.tab === 'stories' ? viewStories() : viewCritic()}
+        ${P.tab === 'show' ? viewShow() : P.tab === 'lines' ? viewLines() : P.tab === 'heart' ? viewHeart() : P.tab === 'awards' ? viewAwards() : P.tab === 'stories' ? viewStories() : viewCritic()}
         ${buildBar()}`;
     }
     return `<div class="pg" role="dialog" aria-modal="true" aria-label="The Playground">
@@ -101,13 +109,13 @@ export function createPlayground({ sb, esc, render, openStory }) {
   }
   function progress() {
     const b = P.building; const pct = b.phase === 'canon' ? 100 : Math.round((b.done / Math.max(1, b.total)) * 100);
-    return `<div class="pg-progress"><p>${b.phase === 'canon' ? 'The critic is writing up the whole canon…' : `Reading story ${Math.min(b.done + 1, b.total)} of ${b.total}…`}</p>
+    return `<div class="pg-progress"><p>${b.phase === 'canon' ? 'The critic is writing up the whole canon…' : b.phase === 'hearts' ? `Finding the heart of story ${Math.min(b.done + 1, b.total)} of ${b.total}…` : `Reading story ${Math.min(b.done + 1, b.total)} of ${b.total}…`}</p>
       <div class="pg-bar"><span style="width:${pct}%"></span></div></div>`;
   }
   function buildBar() {
     if (P.building) return `<section class="pg-panel">${progress()}</section>`;
-    const n = P.missing?.length || 0;
-    return `<footer class="pg-foot">${n ? `<button type="button" class="pg-ghost" data-act="pg-build">Read ${n} new stor${n === 1 ? 'y' : 'ies'} into the Playground</button>` : ''}
+    const n = P.missing?.length || 0; const h = P.noHeart?.length || 0;
+    return `<footer class="pg-foot">${n ? `<button type="button" class="pg-ghost" data-act="pg-build">Read ${n} new stor${n === 1 ? 'y' : 'ies'} into the Playground</button>` : h ? `<button type="button" class="pg-ghost" data-act="pg-build">Find the heart in ${h} more stor${h === 1 ? 'y' : 'ies'}</button>` : ''}
       <button type="button" class="pg-ghost" data-act="pg-recanon">Ask the critic for a fresh take</button>
       <p class="pg-fine">Every quotation here is your own text, checked word for word. Reviews and blurbs are imagined, written to show how readers would respond.</p></footer>`;
   }
@@ -153,12 +161,49 @@ export function createPlayground({ sb, esc, render, openStory }) {
         <p class="pg-hint">${esc(epi.story)}, ${esc(epi.chapter || '')}. One of ${ep.length} chapter epigraphs.</p>
         <button type="button" class="pg-ghost" data-act="pg-epi">Another ✦</button></section>` : ''}
 
+      ${lumpPanel()}
+
       ${P.canon?.pep_talks?.length ? `<section class="pg-panel pg-dressing">
         <h2>Dressing-room mirror</h2>${P.canon.pep_talks.slice(0, 3).map((x) => `<p class="pg-mirror">${esc(x)}</p>`).join('')}
         <p class="pg-hint">Tap “Hype me up” any time for more.</p></section>` : ''}
 
       ${reviewDeck()}
       ${passport()}`;
+  }
+  function lumpPanel() {
+    const all3 = all('moving'); if (!all3.length) return '';
+    const strong = all3.filter((m) => m.intensity >= 4);
+    const m = P.moment || (P.moment = pick(strong.length ? strong : all3));
+    return `<section class="pg-panel pg-candle">
+      <h2>A lump in the throat</h2><p class="pg-hint">One of the moments where the comedy stops and something lands.</p>
+      ${moment(m, false)}
+      <div class="pg-row"><button type="button" class="pg-ghost" data-act="pg-moment">Another</button><button type="button" class="pg-ghost" data-act="pg-tab" data-v="heart">All of Heartstrings</button></div></section>`;
+  }
+  const embers = (n) => `<span class="pg-embers" aria-label="Intensity ${n} of 5">${'<i class="on"></i>'.repeat(n)}${'<i></i>'.repeat(5 - n)}</span>`;
+  function moment(m, full = true) {
+    return `<figure class="pg-moment">
+      <p class="pg-m-top"><span class="pg-feel">${FEEL_LABEL[m.feeling] || esc(m.feeling)}</span>${embers(m.intensity)}</p>
+      <h3>${esc(m.title)}</h3>
+      ${m.setup ? `<p class="pg-m-setup">${esc(m.setup)}</p>` : ''}
+      <blockquote>${esc(m.passage)}</blockquote>
+      <figcaption>${esc(m.story)} · Vol. ${m.vol}${full && m.why ? `<em>${esc(m.why)}</em>` : ''}</figcaption>
+      <button type="button" class="pg-link" data-act="pg-read" data-id="${m.itemId}">Read the story ›</button></figure>`;
+  }
+  function viewHeart() {
+    const list = all('moving');
+    if (!list.length) return `<section class="pg-panel pg-candle"><h2>Heartstrings</h2><p>The editor hasn’t read the stories for their most moving moments yet.</p>
+      ${P.building ? progress() : `<button type="button" class="pg-gold" data-act="pg-build">Find the heart in every story</button>`}</section>`;
+    const counts = {}; list.forEach((m) => { counts[m.feeling] = (counts[m.feeling] || 0) + 1; });
+    let shown = inVol(list); if (P.feel !== 'all') shown = shown.filter((m) => m.feeling === P.feel);
+    shown = [...shown].sort((a, b) => b.intensity - a.intensity);
+    return `<div class="pg-heart">
+      <header class="pg-heart-h"><p class="pg-kick">Heartstrings</p><h2 class="pg-h2">The moments that land</h2>
+        <p class="pg-hint">Where the caper falls quiet and something real gets through. Strongest first.</p></header>
+      ${P.canon?.heart?.length ? `<article class="pg-essay pg-heart-essay">${P.canon.heart.map((x) => `<p>${esc(x)}</p>`).join('')}</article>` : ''}
+      <div class="pg-chips"><button type="button" class="${P.feel === 'all' ? 'on' : ''}" data-act="pg-feel" data-v="all">Every feeling <small>${list.length}</small></button>
+        ${Object.entries(counts).sort((a, b) => b[1] - a[1]).map(([k, n]) => `<button type="button" class="${P.feel === k ? 'on' : ''}" data-act="pg-feel" data-v="${k}">${FEEL_LABEL[k] || k} <small>${n}</small></button>`).join('')}</div>
+      ${volChips()}
+      <div class="pg-moments">${shown.map((m) => moment(m)).join('') || '<p class="pg-hint">Nothing here for this choice yet.</p>'}</div></div>`;
   }
   const stat = (n, l) => `<div class="pg-stat"><b data-count>${n}</b><span>${l}</span></div>`;
   function reviewDeck() {
@@ -232,6 +277,8 @@ export function createPlayground({ sb, esc, render, openStory }) {
           ${open ? `<div class="pg-case-b">
             <p class="pg-meta">${fmt(s.words)} words · ${s.chapters} chapters${s.places?.length ? ` · ${esc(s.places.slice(0, 4).join(', '))}` : ''}</p>
             <h3>Show-stopper: ${esc(s.set_piece?.title || '')}</h3><p>${esc(s.set_piece?.description || '')}</p>
+            ${s.heart_note ? `<h3>Where its heart is</h3><p>${esc(s.heart_note)}</p>` : ''}
+            ${s.moving?.[0] ? `<blockquote class="pg-case-heart">${esc(s.moving[0].passage)}</blockquote>` : ''}
             ${s.strengths?.length ? `<h3>Why it works</h3><ul>${s.strengths.map((x) => `<li><b>${esc(x.title)}.</b> ${esc(x.detail)}</li>`).join('')}</ul>` : ''}
             ${s.funniest?.length ? `<h3>Laugh lines</h3>${s.funniest.slice(0, 4).map((f) => `<blockquote>${esc(f.quote)}</blockquote>`).join('')}` : ''}
             ${s.characters?.length ? `<h3>Cast</h3><p>${s.characters.map((c) => `<b>${esc(c.name)}</b>: ${esc(c.note)}`).join(' · ')}</p>` : ''}
@@ -279,7 +326,7 @@ export function createPlayground({ sb, esc, render, openStory }) {
   // ---------- events ----------
   function onClick(act, el) {
     switch (act) {
-      case 'pg-open': P.open = true; P.tab = 'show'; P.lever = null; P.epi = null; P.review = Math.floor(Math.random() * 50);
+      case 'pg-open': P.open = true; P.tab = 'show'; P.lever = null; P.epi = null; P.moment = null; P.review = Math.floor(Math.random() * 50);
         document.body.classList.add('rit-open'); if (!P.stories) load(); render(); setTimeout(() => { countUp(); confetti(30); }, 60); return true;
       case 'pg-close': P.open = false; P.pep = null; document.body.classList.remove('rit-open'); render(); return true;
       case 'pg-tab': { P.tab = el.dataset.v; render(); const pg = document.querySelector('.pg'); const mq = document.querySelector('.pg-marquee'); if (pg && mq && pg.scrollTop > mq.offsetHeight) pg.scrollTop = mq.offsetHeight + 40; } if (P.tab === 'show') setTimeout(countUp, 30); return true;
@@ -288,6 +335,8 @@ export function createPlayground({ sb, esc, render, openStory }) {
         setTimeout(() => { P.lever = pick(all('funniest')); P.spin = false; render(); if (Math.random() < 0.25) confetti(25); }, 650);
         return true;
       }
+      case 'pg-moment': { const a = all('moving'); const st = a.filter((m) => m.intensity >= 4); P.moment = pick(st.length > 1 ? st : a); render(); return true; }
+      case 'pg-feel': P.feel = el.dataset.v; render(); return true;
       case 'pg-epi': P.epi = pick(all('epigraphs')); render(); return true;
       case 'pg-rev': P.review = (P.review + Number(el.dataset.n) + 1000) % 1000; render(); return true;
       case 'pg-hall': P.hall = el.dataset.v; render(); return true;

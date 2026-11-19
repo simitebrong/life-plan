@@ -1032,3 +1032,23 @@ button.rit-upload { border: 0; font: inherit; font-weight: 700; }
 .hearth-thumbs span { position: absolute; left: 4px; bottom: 4px; min-width: 18px; padding: 0 4px; border-radius: 9px; background: rgb(22 5 9 / 0.7); color: #FBEDE3; font-size: 11px; font-weight: 700; text-align: center; }
 .lp-update { position: fixed; left: 50%; bottom: calc(76px + env(safe-area-inset-bottom)); transform: translateX(-50%); z-index: 90; padding: 11px 18px; border-radius: 999px; border: 0;
   background: #2A1F35; color: #F6E7B0; font: inherit; font-size: 14px; font-weight: 600; box-shadow: 0 6px 24px rgba(0,0,0,.3); cursor: pointer; white-space: nowrap; }
+/* Playground: Heartstrings (candlelit, quieter) */
+.pg-candle { background: radial-gradient(120% 90% at 50% 0%, rgba(214,120,60,.16), transparent 60%), linear-gradient(170deg, #160c0a, #0a0606); border-color: #4a2a14; }
+.pg-candle h2, .pg-heart .pg-h2 { color: #F7D9B5; }
+.pg-heart-h { text-align: center; margin-top: 4px; }
+.pg-heart-h .pg-kick { color: #E39A5C; }
+.pg-heart-essay p { color: #E9D6C2; }
+.pg-moments { display: grid; gap: 14px; margin-top: 8px; }
+.pg-moments .pg-moment { padding: 22px 18px 16px; border-radius: 16px; border: 1px solid #3d2414; background: radial-gradient(110% 70% at 50% 0%, rgba(214,120,60,.10), transparent 65%), #0c0807; animation: pg-rise .6s ease-out both; }
+.pg-moment { margin: 0; }
+.pg-m-top { display: flex; align-items: center; justify-content: space-between; margin: 0 0 6px; }
+.pg-feel { font-family: var(--display); font-size: 11px; letter-spacing: .18em; text-transform: uppercase; color: #E39A5C; }
+.pg-embers { display: inline-flex; gap: 4px; }
+.pg-embers i { width: 7px; height: 7px; border-radius: 50%; background: #3a2416; }
+.pg-embers i.on { background: #F0A867; box-shadow: 0 0 8px rgba(240,168,103,.7); }
+.pg-moment h3 { font-family: 'Cormorant Garamond', Georgia, serif; font-weight: 600; font-size: 24px; color: #F7D9B5; margin: 0 0 6px; }
+.pg-m-setup { font-size: 13px; color: #B89C83; line-height: 1.5; margin: 0 0 12px; }
+.pg-moment blockquote { white-space: pre-line; font-style: italic; font-size: 21px; line-height: 1.5; color: #FFF1E2; padding-left: 14px; border-left: 2px solid #8a4a22; }
+.pg-moment figcaption { margin-top: 12px; font-size: 12px; color: #A88B72; line-height: 1.5; }
+.pg-moment figcaption em { display: block; margin-top: 6px; font-size: 13px; color: #C9AE95; }
+.pg-case-heart { white-space: pre-line; font-style: italic; border-left-color: #8a4a22 !important; }
