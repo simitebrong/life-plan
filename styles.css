@@ -1010,3 +1010,4 @@ button.rit-change { background: none; border: 0; padding: 0; font: inherit; }
 @keyframes pg-fall { to { transform: translate(var(--dx), 105vh) rotate(var(--rot)); opacity: .8; } }
 @media (max-width: 420px) { .pg-meters { grid-template-columns: repeat(2, 1fr); } .pg-stat span { font-size: 10px; letter-spacing: .08em; } }
 @media (prefers-reduced-motion: reduce) { .pg *, .pg-entry * { animation: none !important; } }
+button.rit-upload { border: 0; font: inherit; font-weight: 700; }

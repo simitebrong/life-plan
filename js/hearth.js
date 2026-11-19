@@ -72,13 +72,13 @@ export function createHearth({ sb, esc, render, getOutcome, setOutcome, dayLabel
   async function addPics(files) {
     H.busy = true; H.msg = `Saving ${files.length} photo${files.length > 1 ? 's' : ''}…`; redraw();
     try {
-      const dir = await folder(); const c = 'caches' in window ? await caches.open(CACHE) : null;
+      const dir = await folder(); if (!dir) throw new Error('not signed in'); const c = 'caches' in window ? await caches.open(CACHE) : null;
       for (const f of files) {
         const n = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}.${(f.type.split('/')[1] || 'jpg').replace('jpeg', 'jpg')}`;
         const { error } = await sb.storage.from('library').upload(`${dir}/${n}`, f, { contentType: f.type || 'image/jpeg' });
         if (error) throw error;
         if (c) await c.put(`/__hearth/${n}`, new Response(f, { headers: { 'Content-Type': f.type || 'image/jpeg' } }));
-        H.pics.unshift({ name: n, url: URL.createObjectURL(f) });
+        (H.pics ||= []).unshift({ name: n, url: URL.createObjectURL(f) });
       }
       H.idx = 0; H.msg = '';
     } catch (e) { console.error(e); H.msg = 'Some photos didn’t save. Check your connection and try again.'; }
@@ -93,6 +93,17 @@ export function createHearth({ sb, esc, render, getOutcome, setOutcome, dayLabel
       URL.revokeObjectURL(p.url); H.pics.splice(i, 1); H.idx = Math.min(H.idx, Math.max(0, H.pics.length - 1)); H.confirm = null;
     } catch (e) { console.error(e); H.msg = 'Couldn’t remove that one just now.'; }
     redraw();
+  }
+
+  // one picker that lives outside the app's redrawn area, so a redraw can never swallow the chosen photos
+  let picker = null;
+  function choose() {
+    if (!picker) {
+      picker = Object.assign(document.createElement('input'), { type: 'file', accept: 'image/*', multiple: true, hidden: true });
+      picker.addEventListener('change', () => { const files = [...(picker.files || [])]; picker.value = ''; if (files.length) addPics(files); });
+      document.body.appendChild(picker);
+    }
+    picker.click();
   }
 
   // ---------- timer (same rhythm as the rituals) ----------
@@ -111,7 +122,7 @@ export function createHearth({ sb, esc, render, getOutcome, setOutcome, dayLabel
     try { if (on && 'wakeLock' in navigator && !lock) lock = await navigator.wakeLock.request('screen'); if (!on && lock) { await lock.release(); lock = null; } } catch { /* fine */ }
   }
   function startStep(i) {
-    H.step = i; H.left = STEPS[i].secs; H.running = true; H.eased = false; last = Date.now();
+    H.step = i; H.left = STEPS[i].secs; H.running = true; H.eased = false; H.slide = null; last = Date.now();
     clearInterval(timer); timer = setInterval(tick, 200); keepAwake(true); redraw();
     document.querySelector('.hearth')?.scrollTo(0, 0);
   }
@@ -119,6 +130,10 @@ export function createHearth({ sb, esc, render, getOutcome, setOutcome, dayLabel
     if (!H.running) return;
     const now = Date.now(); H.left -= (now - last) / 1000; last = now;
     const st = STEPS[H.step];
+    // on picture steps, drift to the next photo every 15 seconds
+    if (st.gallery && !H.veiled && H.pics?.length > 1 && Math.floor((st.secs - H.left) / 15) !== H.slide) {
+      const s = Math.floor((st.secs - H.left) / 15); if (H.slide != null && s > H.slide) { H.idx = (H.idx + 1) % H.pics.length; H.slide = s; redraw(); return; } H.slide = s;
+    }
     // waves: build for two thirds, then the chime says ease back
     if (st.wave && !H.eased && H.left <= st.secs / 3) { H.eased = true; chime(true); paint(); }
     if (H.left <= 0) {
@@ -148,7 +163,12 @@ export function createHearth({ sb, esc, render, getOutcome, setOutcome, dayLabel
   const redraw = () => { if (H.open) { render(); paint(); } };
 
   // hide everything again if the phone is put down or the app is switched away
-  document.addEventListener('visibilitychange', () => { if (document.hidden && H.open) { H.veiled = true; if (H.running) { H.running = false; keepAwake(false); } redraw(); } });
+  // (no full redraw here: Android fires this when the photo picker opens, and redrawing would throw the picker's input away)
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden || !H.open) return;
+    H.veiled = true; document.querySelectorAll('.hearth-gal').forEach((g) => g.classList.add('veiled'));
+    if (H.running) { H.running = false; keepAwake(false); const pp = document.querySelector('.hearth .rit-pp'); if (pp) pp.textContent = 'Resume'; }
+  });
 
   // ---------- views ----------
   function entry() {
@@ -161,7 +181,7 @@ export function createHearth({ sb, esc, render, getOutcome, setOutcome, dayLabel
   function gallery(small) {
     if (H.pics === null) return `<div class="hearth-gal empty"><span class="rit-spin"></span></div>`;
     if (!H.pics.length) return `<div class="hearth-gal empty"><p>Add the photos of her that stir you most. They’re kept privately in your account, never on the website, and stay hidden until you tap.</p>
-      <label class="rit-upload">Add photos<input type="file" accept="image/*" multiple data-hearth-file hidden></label>${H.msg ? `<p class="rit-msg">${esc(H.msg)}</p>` : ''}</div>`;
+      <button type="button" class="rit-upload" data-act="hearth-add">Add photos</button>${H.msg ? `<p class="rit-msg">${esc(H.msg)}</p>` : ''}</div>`;
     const p = H.pics[H.idx];
     return `<div class="hearth-gal${small ? ' small' : ''}${H.veiled ? ' veiled' : ''}">
       <button type="button" class="hearth-photo" data-act="hearth-veil" aria-label="${H.veiled ? 'Reveal photo' : 'Hide photo'}"><img src="${p.url}" alt="">${H.veiled ? '<span class="hearth-veil">Tap to reveal</span>' : ''}</button>
@@ -179,7 +199,7 @@ export function createHearth({ sb, esc, render, getOutcome, setOutcome, dayLabel
         <ol class="rit-steps hearth-steps">${STEPS.map((s, i) => `<li><button type="button" data-act="hearth-step" data-i="${i}"><span class="hearth-n">${i + 1}</span>
           <span class="rit-st"><b>${esc(s.title)}</b><span>${esc(s.how[0])}</span></span><span class="rit-sec">${s.secs >= 60 ? `${Math.round(s.secs / 6) / 10} min` : `${s.secs}s`}</span></button></li>`).join('')}</ol>
         <button type="button" class="rit-begin" data-act="hearth-begin">Begin · ${Math.round(TOTAL / 60)} min</button>
-        ${H.pics?.length ? `<div class="rit-pics"><label class="rit-change">Add photos<input type="file" accept="image/*" multiple data-hearth-file hidden></label>
+        ${H.pics?.length ? `<div class="rit-pics"><button type="button" class="rit-change" data-act="hearth-add">Add photos</button>
           ${H.confirm === H.idx ? `<button type="button" class="rit-change warn" data-act="hearth-del">Tap again to remove this photo</button>` : `<button type="button" class="rit-change" data-act="hearth-del-ask">Remove this photo</button>`}</div>` : ''}
         ${H.msg && H.pics?.length ? `<p class="rit-msg">${esc(H.msg)}</p>` : ''}
         <p class="rit-care">The screen hides your photos again whenever you leave the app.</p>`;
@@ -222,11 +242,12 @@ export function createHearth({ sb, esc, render, getOutcome, setOutcome, dayLabel
     switch (act) {
       case 'hearth-open': H.open = true; H.step = -1; H.veiled = true; H.msg = ''; document.body.classList.add('rit-open'); loadPics(); render(); return true;
       case 'hearth-close': stop(); H.open = false; H.step = -1; H.veiled = true; H.confirm = null; document.body.classList.remove('rit-open'); render(); return true;
-      case 'hearth-begin': if (audio?.state === 'suspended') audio.resume(); startStep(0); return true;
+      case 'hearth-begin': if (audio?.state === 'suspended') audio.resume(); H.veiled = false; startStep(0); return true;
       case 'hearth-step': startStep(Number(el.dataset.i)); return true;
       case 'hearth-next': if (H.step + 1 < STEPS.length) startStep(H.step + 1); else { stop(); H.step = STEPS.length; redraw(); } return true;
       case 'hearth-prev': startStep(Math.max(0, H.step - 1)); return true;
       case 'hearth-pause': H.running = !H.running; last = Date.now(); keepAwake(H.running); redraw(); return true;
+      case 'hearth-add': choose(); return true;
       case 'hearth-veil': H.veiled = !H.veiled; redraw(); return true;
       case 'hearth-pic': if (H.pics?.length) { H.idx = (H.idx + Number(el.dataset.n) + H.pics.length) % H.pics.length; H.confirm = null; } redraw(); return true;
       case 'hearth-del-ask': H.confirm = H.idx; redraw(); return true;
