@@ -1030,3 +1030,5 @@ button.rit-upload { border: 0; font: inherit; font-weight: 700; }
 .hearth-thumbs button.on { border-color: #E8956E; }
 .hearth-thumbs img { display: block; width: 100%; object-fit: cover; }
 .hearth-thumbs span { position: absolute; left: 4px; bottom: 4px; min-width: 18px; padding: 0 4px; border-radius: 9px; background: rgb(22 5 9 / 0.7); color: #FBEDE3; font-size: 11px; font-weight: 700; text-align: center; }
+.lp-update { position: fixed; left: 50%; bottom: calc(76px + env(safe-area-inset-bottom)); transform: translateX(-50%); z-index: 90; padding: 11px 18px; border-radius: 999px; border: 0;
+  background: #2A1F35; color: #F6E7B0; font: inherit; font-size: 14px; font-weight: 600; box-shadow: 0 6px 24px rgba(0,0,0,.3); cursor: pointer; white-space: nowrap; }

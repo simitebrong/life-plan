@@ -1268,8 +1268,26 @@ document.addEventListener('visibilitychange', () => {
     if (S.lastSeenDay !== todayIso() && S.day === S.lastSeenDay) S.day = todayIso();
     S.lastSeenDay = todayIso();
     loadAll().then(render);
+    checkForUpdate();
   }
 });
+
+// A home-screen app can stay in memory for days. When it comes back to the front, check whether a newer
+// version has been published: reload straight away if nothing is in progress, otherwise offer a tap to update.
+async function checkForUpdate() {
+  try {
+    const txt = await (await fetch(`/js/config.js?check=${Date.now()}`, { cache: 'no-store' })).text();
+    const live = txt.match(/APP_VERSION = '([^']+)'/)?.[1];
+    if (!live || live === APP_VERSION) return;
+    const busy = document.querySelector('.rit, .pg') || document.activeElement?.matches?.('input, textarea, select');
+    if (!busy) { location.reload(); return; }
+    if (document.querySelector('.lp-update')) return;
+    const b = Object.assign(document.createElement('button'), { type: 'button', className: 'lp-update', textContent: `New version ${live} ready · tap to update` });
+    b.addEventListener('click', () => location.reload());
+    document.body.appendChild(b);
+  } catch { /* offline: try again next time */ }
+}
+setTimeout(checkForUpdate, 4000);
 S.lastSeenDay = todayIso();
 
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js');
