@@ -543,7 +543,7 @@ function viewToday() {
       <button type="button" class="nav-arrow" data-act="day" data-n="1" ${isToday ? 'disabled' : ''} aria-label="Next day">›</button>
     </div>
     ${isToday ? `<p class="age-line">${esc(ageLine(S.day))}</p>` : ''}
-    ${isToday ? lib.todayCard() : ''}
+    ${isToday ? lib.todayCard() : ''}${isToday ? playground.todayLine() : ''}
     ${isToday && yesterdayUnfinished() ? `<button type="button" class="catchup" data-act="day" data-n="-1">Yesterday isn’t finished yet. <strong>Fill it in</strong></button>` : ''}
     <div class="score-block">
       ${ringSVG(sc)}
@@ -839,6 +839,7 @@ const TABS = [
 lib = createLibrary({
   S, sb, store, esc, todayIso,
   playgroundEntry: () => playground.entry(),
+  playgroundBack: () => playground.onClick('pg-back'),
   render: () => render(),
   entryFor: (day, peek) => (peek ? S.entries[day] : (S.entries[day] ||= {})),
   queueSave: (day) => queueSave(day),
@@ -857,7 +858,7 @@ const hearth = createHearth({
 });
 const playground = createPlayground({
   sb, esc, render: () => render(),
-  openStory: (id) => lib.onClick('l-read', { dataset: { id } }),
+  openStory: (id, quote) => (quote ? lib.openAt(id, quote) : lib.onClick('l-read', { dataset: { id } })),
 });
 const ritual = createRitual({
   S, sb, esc, render: () => render(),
@@ -890,6 +891,7 @@ function render() {
   setSaveState(S.saveState);
   if (immersive) document.body.dataset.rt = store.get('lp-reader', {}).theme || 'auto'; else delete document.body.dataset.rt;
   lib.afterRender();
+  playground.afterRender();
 }
 
 function sheetHTML() {

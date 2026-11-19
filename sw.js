@@ -1,5 +1,5 @@
 // Life Plan service worker: offline shell + push reminders
-const CACHE = 'life-plan-v33';
+const CACHE = 'life-plan-v34';
 const SHELL = ['/', '/index.html', '/styles.css', '/js/app.js', '/js/fields.js', '/js/config.js', '/js/goals-seed.js', '/js/library.js', '/js/analysis.js', '/js/charts.js', '/js/progress.js', '/js/ritual.js', '/js/hearth.js', '/js/playground.js',
   '/manifest.webmanifest', '/icons/icon-192.png'];
 
@@ -16,7 +16,7 @@ self.addEventListener('fetch', (e) => {
   const url = new URL(e.request.url);
   if (e.request.method !== 'GET') return;
   const own = url.origin === self.location.origin;
-  const fonts = url.host.includes('fonts.g') || url.host.includes('jsdelivr');
+  const fonts = url.host.includes('fonts.g') || url.host.includes('jsdelivr') || url.host.includes('tile.openstreetmap');
   if (!own && !fonts) return;
   e.respondWith(
     fetch(e.request).then((res) => {

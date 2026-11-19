@@ -220,6 +220,7 @@ export function createLibrary(api) {
   }
   let progTimer = null;
   function saveProgress(item, c, p, finished = false) {
+    if (L.visit && !finished) return; // visiting a passage from the Playground doesn't move your bookmark
     const pct = finished ? 100 : pctAt(L.content, c, p);
     item.progress = { c, p, pct, ts: Date.now() };
     item.last_read_at = new Date().toISOString();
@@ -283,15 +284,38 @@ export function createLibrary(api) {
     const pr = item.progress || { c: 0, p: 0 };
     L.chapter = Math.min(opts.c ?? pr.c ?? 0, content.chapters.length - 1);
     L.pendingScroll = opts.p ?? (opts.c == null ? pr.p : 0) ?? 0;
-    if (opts.p != null) L.sel = opts.p;
+    if (opts.p != null && !opts.visit) L.sel = opts.p;
+    L.visit = opts.visit || null;
     render();
+  }
+  // Open a story at the paragraph where a quoted passage begins, and light up the passage.
+  const plain = (h) => h.replace(/<br\s*\/?>/gi, ' ').replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#39;/g, "'");
+  const normq = (t) => t.toLowerCase().replace(/[‘’`´]/g, "'").replace(/[“”]/g, '"').replace(/[^a-z0-9]+/g, ' ').trim();
+  async function openAt(itemId, quote) {
+    const item = itemById(itemId); if (!item) return;
+    const content = await getContent(item);
+    const q = normq(quote || ''); const head = q.split(' ').slice(0, 12).join(' ');
+    if (content && head) {
+      for (let c = 0; c < content.chapters.length; c++) {
+        // search the whole chapter as one run of text, so passages that start mid-paragraph or span paragraphs are found
+        const ps = content.chapters[c].paras.map((h) => normq(plain(h)));
+        const starts = []; let joined = '';
+        ps.forEach((t) => { starts.push(joined.length); joined += `${t} `; });
+        const at = joined.indexOf(head); if (at < 0) continue;
+        const paraAt = (i) => { let k = 0; while (k + 1 < starts.length && starts[k + 1] <= i) k++; return k; };
+        const from = paraAt(at); const to = paraAt(Math.min(joined.length - 1, at + q.length - 1));
+        return openReader(itemId, { c, p: from, visit: { c, from, to } });
+      }
+    }
+    return openReader(itemId); // couldn't place it: open as normal
   }
   function afterRender() {
     if (L.reading && L.pendingScroll != null) {
       const p = L.pendingScroll; L.pendingScroll = null;
       requestAnimationFrame(() => {
         const el = document.querySelector(`[data-p="${p}"]`);
-        if (el && p > 0) el.scrollIntoView({ block: 'start' }); else window.scrollTo(0, 0);
+        if (el && L.visit) el.scrollIntoView({ block: 'start' });
+        else if (el && p > 0) el.scrollIntoView({ block: 'start' }); else window.scrollTo(0, 0);
       });
     }
   }
@@ -558,7 +582,8 @@ export function createLibrary(api) {
     const theme = prefs.theme === 'auto' ? '' : ` rt-${prefs.theme}`;
     const paras = ch.paras.map((html, p) => {
       const ns = byPara[p]; const sel = L.sel === p;
-      return `<p data-p="${p}" data-act="l-para" class="rp${ns ? ' has-note' : ''}${sel ? ' sel' : ''}${html.startsWith('<span class="scene"') ? ' scene-p' : ''}">${html}</p>${sel ? `<div class="para-tools">
+      const lit = L.visit && L.visit.c === L.chapter && p >= L.visit.from && p <= L.visit.to;
+      return `<p data-p="${p}" data-act="l-para" class="rp${ns ? ' has-note' : ''}${sel ? ' sel' : ''}${lit ? ' lit' : ''}${html.startsWith('<span class="scene"') ? ' scene-p' : ''}">${html}</p>${sel ? `<div class="para-tools">
           ${(ns || []).map((n) => `<div class="pnote${n.resolved ? ' is-done' : ''}"><p>${esc(n.note)}</p><div class="rnote-meta">
             <button type="button" class="link sm" data-act="l-note-edit" data-id="${n.id}">Edit</button>
             <button type="button" class="link sm" data-act="l-note-resolve" data-id="${n.id}">${n.resolved ? 'Reopen' : 'Dealt with'}</button>
@@ -584,6 +609,9 @@ export function createLibrary(api) {
         <button type="button" class="rbtn txt" data-act="l-panel" data-v="aa" aria-label="Reading settings">Aa</button>
         <button type="button" class="rbtn txt" data-act="l-panel" data-v="notes" aria-label="Notes">${openNotes ? `<span class="rcount">${openNotes}</span>` : ''}Notes</button>
       </header>
+      ${L.visit ? `<div class="rvisit"><span>✦ Your bookmark stays where it was</span>
+        <div><button type="button" class="link sm" data-act="l-visit-back">‹ Playground</button>
+        <button type="button" class="link sm" data-act="l-visit-keep">Read on from here</button></div></div>` : ''}
       <div class="rtext">
         <h2 class="rch">${esc(ch.title)}</h2>
         ${paras}
@@ -658,7 +686,9 @@ export function createLibrary(api) {
       case 'l-shelf': S.view = 'library'; L.newShelf = false; L.shelf = el.dataset.id; L.item = null; L.reading = false; L.content = null; L.panel = null; L.adding = null; L.confirm = null; L.msg = ''; render(); window.scrollTo(0, 0); break;
       case 'l-item': L.content = L.item === el.dataset.id ? L.content : null; await openItem(el.dataset.id); break;
       case 'l-read': if (L.item !== el.dataset.id) L.content = null; await openReader(el.dataset.id); break;
-      case 'l-close': L.reading = false; L.panel = null; L.sel = null; render(); window.scrollTo(0, 0); break;
+      case 'l-visit-keep': { L.visit = null; const el2 = document.querySelector('.rp.lit'); render(); if (el2) saveProgress(item, L.chapter, Number(el2.dataset.p)); break; }
+      case 'l-visit-back': L.visit = null; L.reading = false; L.panel = null; L.sel = null; render(); api.playgroundBack?.(); break;
+      case 'l-close': L.visit = null; L.reading = false; L.panel = null; L.sel = null; render(); window.scrollTo(0, 0); break;
       case 'l-newshelf': L.newShelf = true; render(); document.querySelector('#shelf-form input')?.focus(); break;
       case 'l-add': L.adding = el.dataset.v; L.newShelf = false; L.msg = ''; render(); break;
       case 'l-add-cancel': L.adding = null; render(); break;
@@ -797,5 +827,5 @@ export function createLibrary(api) {
 
   function reset() { L.shelf = null; L.item = null; L.reading = false; L.content = null; L.panel = null; L.sel = null; L.adding = null; L.confirm = null; L.msg = ''; L.newShelf = false; L.noteEdit = null; }
 
-  return { load, view, immersive, afterRender, onClick, onChange, onSubmit, todayCard, goalSection, reset, openItem };
+  return { load, view, immersive, afterRender, onClick, onChange, onSubmit, todayCard, goalSection, reset, openItem, openAt };
 }

@@ -9,12 +9,17 @@ const BENCH = [ // well-known word counts, for fun comparisons (approximate)
 const SCORE_LABEL = { wit: 'Wit', invention: 'Invention', pace: 'Pace', set_pieces: 'Set pieces', atmosphere: 'Atmosphere', heart: 'Heart' };
 const FEEL_LABEL = { tenderness: 'Tenderness', loyalty: 'Loyalty', courage: 'Courage', grief: 'Grief', longing: 'Longing', redemption: 'Redemption', sacrifice: 'Sacrifice', joy: 'Joy', homecoming: 'Homecoming', farewell: 'Farewell' };
 const KIND_LABEL = { wit: 'Wit', atmosphere: 'Atmosphere', wisdom: 'Wisdom', menace: 'Menace', tenderness: 'Tenderness', action: 'Action' };
+const MOODS = [['laugh', 'A laugh'], ['lift', 'A lift'], ['lump', 'A lump in the throat'], ['courage', 'Courage'], ['swagger', 'Some swagger']];
+const hash = (t) => { let h = 5381; for (let i = 0; i < t.length; i++) h = ((h << 5) + h + t.charCodeAt(i)) | 0; return (h >>> 0).toString(36); };
+const textOf = (x) => x.passage || x.quote || x.text || '';
+const DAY = () => new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/London' });
+const shuffle = (a) => [...a].sort(() => Math.random() - 0.5);
 const pick = (a) => a[Math.floor(Math.random() * a.length)];
 const fmt = (n) => Math.round(n).toLocaleString('en-GB');
 
 export function createPlayground({ sb, esc, render, openStory }) {
   const P = { open: false, stories: null, canon: null, loading: false, tab: 'show', hall: 'funniest', feel: 'all', moment: null, vol: 0, sort: 'order',
-    lever: null, quote: null, award: new Set(), expanded: null, building: null, pep: null, review: 0, err: '' };
+    lever: null, quote: null, extras: null, favs: new Map(), reg: {}, mood: null, moodItem: null, mirror: null, castOpen: null, card: null, daily: undefined, award: new Set(), expanded: null, building: null, pep: null, review: 0, err: '' };
 
   // ---------- data ----------
   async function load() {
@@ -25,6 +30,9 @@ export function createPlayground({ sb, esc, render, openStory }) {
       P.stories = (data || []).filter((r) => r.kind === 'story').map((r) => ({ ...r.data, itemId: r.item_id }))
         .sort((a, b) => a.volNum - b.volNum || a.num - b.num);
       P.canon = (data || []).find((r) => r.kind === 'canon')?.data || null;
+      P.extras = (data || []).find((r) => r.kind === 'extras')?.data || null;
+      const { data: favs } = await sb.from('playground_favs').select('key,item_id,data,created_at').order('created_at', { ascending: false });
+      P.favs = new Map((favs || []).map((f) => [f.key, f]));
       await findMissing();
     } catch (e) { console.error(e); P.err = 'Couldn’t open the Playground just now. Check your connection and try again.'; P.stories = P.stories || []; }
     P.loading = false; redraw();
@@ -62,7 +70,14 @@ export function createPlayground({ sb, esc, render, openStory }) {
     P.building = P.building || { done: 0, total: 0 };
     P.building.phase = 'canon'; redraw();
     try { await sb.functions.invoke('playground', { body: { action: 'canon' } }); } catch (e) { console.error(e); }
+    P.building.phase = 'extras'; redraw();
+    try { await sb.functions.invoke('playground', { body: { action: 'extras' } }); } catch (e) { console.error(e); }
     P.building = null; P.loading = false; P.stories = null; await load(); confetti(60);
+  }
+  async function refreshExtras() {
+    P.building = { done: 0, total: 0, phase: 'extras' }; redraw();
+    try { await sb.functions.invoke('playground', { body: { action: 'extras' } }); } catch (e) { console.error(e); }
+    P.building = null; P.stories = null; await load(); confetti(40);
   }
   async function refreshCanon() {
     P.building = { done: 0, total: 0, phase: 'canon' }; redraw();
@@ -83,7 +98,7 @@ export function createPlayground({ sb, esc, render, openStory }) {
   const avg = (s) => { const v = Object.values(s.scores || {}); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : 0; };
 
   // ---------- views ----------
-  const TABS = [['show', 'The Show'], ['lines', 'Hall of Lines'], ['heart', 'Heartstrings'], ['awards', 'Awards'], ['stories', 'The Cases'], ['critic', 'The Critic']];
+  const TABS = [['show', 'The Show'], ['lines', 'Hall of Lines'], ['heart', 'Heartstrings'], ['cast', 'The Cast'], ['atlas', 'The Atlas'], ['awards', 'Awards'], ['stories', 'The Cases'], ['critic', 'The Critic'], ['mine', '★ My Anthology']];
   function overlay() {
     if (!P.open) return '';
     let body;
@@ -92,14 +107,14 @@ export function createPlayground({ sb, esc, render, openStory }) {
     else {
       body = `${marquee()}
         <nav class="pg-tabs" role="tablist">${TABS.map(([id, l]) => `<button type="button" role="tab" class="${P.tab === id ? 'on' : ''}" aria-selected="${P.tab === id}" data-act="pg-tab" data-v="${id}">${l}</button>`).join('')}</nav>
-        ${P.tab === 'show' ? viewShow() : P.tab === 'lines' ? viewLines() : P.tab === 'heart' ? viewHeart() : P.tab === 'awards' ? viewAwards() : P.tab === 'stories' ? viewStories() : viewCritic()}
+        ${P.tab === 'show' ? viewShow() : P.tab === 'lines' ? viewLines() : P.tab === 'heart' ? viewHeart() : P.tab === 'cast' ? viewCast() : P.tab === 'atlas' ? viewAtlas() : P.tab === 'mine' ? viewMine() : P.tab === 'awards' ? viewAwards() : P.tab === 'stories' ? viewStories() : viewCritic()}
         ${buildBar()}`;
     }
     return `<div class="pg" role="dialog" aria-modal="true" aria-label="The Playground">
       <button type="button" class="pg-x" data-act="pg-close" aria-label="Close">×</button>
       <button type="button" class="pg-hype" data-act="pg-hype" aria-label="Hype me up">✦ Hype me up</button>
       ${P.pep ? `<div class="pg-pep" role="status"><span>✦</span><p>${esc(P.pep)}</p></div>` : ''}
-      <div class="pg-inner">${body}</div></div>`;
+      <div class="pg-inner">${body}</div>${cardSheet()}</div>`;
   }
   function emptyStage() {
     const n = P.missing?.length || 0;
@@ -108,8 +123,8 @@ export function createPlayground({ sb, esc, render, openStory }) {
       ${n ? `<button type="button" class="pg-gold" data-act="pg-build">Light up the Playground</button>` : ''}`}${P.err ? `<p class="pg-err">${esc(P.err)}</p>` : ''}</div>`;
   }
   function progress() {
-    const b = P.building; const pct = b.phase === 'canon' ? 100 : Math.round((b.done / Math.max(1, b.total)) * 100);
-    return `<div class="pg-progress"><p>${b.phase === 'canon' ? 'The critic is writing up the whole canon…' : b.phase === 'hearts' ? `Finding the heart of story ${Math.min(b.done + 1, b.total)} of ${b.total}…` : `Reading story ${Math.min(b.done + 1, b.total)} of ${b.total}…`}</p>
+    const b = P.building; const pct = (b.phase === 'canon' || b.phase === 'extras') ? 100 : Math.round((b.done / Math.max(1, b.total)) * 100);
+    return `<div class="pg-progress"><p>${b.phase === 'canon' ? 'The critic is writing up the whole canon…' : b.phase === 'extras' ? 'Gathering the cast and plotting the atlas…' : b.phase === 'hearts' ? `Finding the heart of story ${Math.min(b.done + 1, b.total)} of ${b.total}…` : `Reading story ${Math.min(b.done + 1, b.total)} of ${b.total}…`}</p>
       <div class="pg-bar"><span style="width:${pct}%"></span></div></div>`;
   }
   function buildBar() {
@@ -117,6 +132,7 @@ export function createPlayground({ sb, esc, render, openStory }) {
     const n = P.missing?.length || 0; const h = P.noHeart?.length || 0;
     return `<footer class="pg-foot">${n ? `<button type="button" class="pg-ghost" data-act="pg-build">Read ${n} new stor${n === 1 ? 'y' : 'ies'} into the Playground</button>` : h ? `<button type="button" class="pg-ghost" data-act="pg-build">Find the heart in ${h} more stor${h === 1 ? 'y' : 'ies'}</button>` : ''}
       <button type="button" class="pg-ghost" data-act="pg-recanon">Ask the critic for a fresh take</button>
+      ${P.tab === 'cast' || P.tab === 'atlas' ? `<button type="button" class="pg-ghost" data-act="pg-extras">Refresh the cast and atlas</button>` : ''}
       <p class="pg-fine">Every quotation here is your own text, checked word for word. Reviews and blurbs are imagined, written to show how readers would respond.</p></footer>`;
   }
   const bulbs = (n) => `<div class="pg-bulbs" aria-hidden="true">${Array.from({ length: n }, (_, i) => `<i style="--i:${i}"></i>`).join('')}</div>`;
@@ -129,6 +145,199 @@ export function createPlayground({ sb, esc, render, openStory }) {
       ${P.canon?.tagline ? `<p class="pg-tag">“${esc(P.canon.tagline)}”</p>` : ''}
       ${bulbs(22)}</header>`;
   }
+
+  // ---------- quote tools: read at the exact spot, favourite, make a card ----------
+  function reg(x, kind) {
+    const k = `${kind}:${hash(textOf(x))}`; P.reg[k] = { ...x, kind }; return k;
+  }
+  function tools(x, kind, label = 'Read it ›') {
+    const k = reg(x, kind); const on = P.favs.has(k);
+    return `<span class="pg-tools">${x.itemId ? `<button type="button" class="pg-link" data-act="pg-read" data-k="${k}">${label}</button>` : ''}
+      <button type="button" class="pg-ico${on ? ' on' : ''}" data-act="pg-fav" data-k="${k}" aria-pressed="${on}" aria-label="${on ? 'Remove from' : 'Add to'} My Anthology">${on ? '★' : '☆'}</button>
+      <button type="button" class="pg-ico" data-act="pg-card" data-k="${k}" aria-label="Make a quote card">▣</button></span>`;
+  }
+  async function toggleFav(k) {
+    const x = P.reg[k] || P.favs.get(k)?.data; if (!x) return;
+    if (P.favs.has(k)) {
+      P.favs.delete(k); redraw();
+      const { error } = await sb.from('playground_favs').delete().eq('key', k); if (error) console.error(error);
+    } else {
+      const data = { kind: x.kind, text: textOf(x), story: x.story, vol: x.vol, itemId: x.itemId, by: x.by || null, title: x.title || null, feeling: x.feeling || null, why: x.why || null };
+      P.favs = new Map([[k, { key: k, item_id: x.itemId || null, data, created_at: new Date().toISOString() }], ...P.favs]); redraw(); confetti(18);
+      const { error } = await sb.from('playground_favs').insert({ key: k, item_id: x.itemId || null, data }); if (error) console.error(error);
+    }
+  }
+  function viewMine() {
+    const favs = [...P.favs.values()];
+    if (!favs.length) return `<section class="pg-panel"><h2>My Anthology</h2><p>Tap the ☆ on any line or moment and it lands here: your own hand-picked best of Basil.</p></section>`;
+    return `<p class="pg-intro">Your hand-picked best of the canon. ${favs.length} piece${favs.length === 1 ? '' : 's'} and counting.</p>
+      <div class="pg-wall">${favs.map((f, i) => { const x = { ...f.data, quote: f.data.text }; P.reg[f.key] = x; const on = true;
+        return `<figure class="pg-card${f.data.kind === 'moving' ? ' pg-card-heart' : ''}" style="--d:${(i % 12) * 40}ms">
+        ${x.title ? `<h3 class="pg-card-t">${esc(x.title)}</h3>` : ''}<blockquote>${esc(x.text)}</blockquote>
+        <figcaption>${x.by ? `— ${esc(x.by)}<br>` : ''}${esc(x.story || '')}${x.vol ? ` · Vol. ${x.vol}` : ''}</figcaption>
+        <span class="pg-tools">${x.itemId ? `<button type="button" class="pg-link" data-act="pg-read" data-k="${f.key}">Read it ›</button>` : ''}
+        <button type="button" class="pg-ico on" data-act="pg-fav" data-k="${f.key}" aria-pressed="true" aria-label="Remove from My Anthology">★</button>
+        <button type="button" class="pg-ico" data-act="pg-card" data-k="${f.key}" aria-label="Make a quote card">▣</button></span></figure>`; }).join('')}</div>`;
+  }
+
+  // ---------- quote card image ----------
+  async function makeCard(x) {
+    const W = 1080, H = 1350; const cv = document.createElement('canvas'); cv.width = W; cv.height = H; const g = cv.getContext('2d');
+    try { await Promise.all([document.fonts.load('italic 500 60px "Cormorant Garamond"'), document.fonts.load('600 30px "Bricolage Grotesque"')]); } catch { /* fall back */ }
+    const heart = x.kind === 'moving';
+    const bg = g.createRadialGradient(W / 2, 0, 50, W / 2, 300, 1300);
+    bg.addColorStop(0, heart ? '#3a1d10' : '#3a2a0a'); bg.addColorStop(0.55, heart ? '#140a07' : '#120d04'); bg.addColorStop(1, '#050403');
+    g.fillStyle = bg; g.fillRect(0, 0, W, H);
+    const gold = g.createLinearGradient(0, 0, W, H); gold.addColorStop(0, '#FFF1C1'); gold.addColorStop(0.5, '#D4AF37'); gold.addColorStop(1, '#9c7a17');
+    g.strokeStyle = gold; g.lineWidth = 3; g.strokeRect(40, 40, W - 80, H - 80); g.lineWidth = 1; g.strokeRect(56, 56, W - 112, H - 112);
+    g.fillStyle = '#D4AF37'; g.textAlign = 'center'; g.font = '600 26px "Bricolage Grotesque", sans-serif';
+    const spaced = (t, y) => { g.save(); if ('letterSpacing' in g) g.letterSpacing = '8px'; g.fillText(t, W / 2, y); g.restore(); };
+    spaced(heart ? 'HEARTSTRINGS' : 'BASIL RUFFLETUM', 130);
+    if (x.title) { g.fillStyle = '#F7D9B5'; g.font = '500 44px "Cormorant Garamond", serif'; g.fillText(x.title, W / 2, 200); }
+    // fit the text
+    const raw = textOf(x).replace(/\s*\n\s*/g, ' ').trim(); const text = /^[“"]/.test(raw) ? raw : `“${raw}”`;
+    const maxW = W - 220; const top = x.title ? 250 : 210; const bottom = H - 250;
+    let size = 66, lines = [];
+    const wrap = () => { const words = text.split(' '); lines = []; let line = '';
+      for (const w of words) { const t = line ? `${line} ${w}` : w; if (g.measureText(t).width > maxW && line) { lines.push(line); line = w; } else line = t; } if (line) lines.push(line); };
+    for (; size >= 26; size -= 2) { g.font = `italic 500 ${size}px "Cormorant Garamond", serif`; wrap(); if (lines.length * size * 1.32 <= bottom - top) break; }
+    const lh = size * 1.32; let y = top + (bottom - top - lines.length * lh) / 2 + size;
+    g.fillStyle = '#FFF6DE'; lines.forEach((l) => { g.fillText(l, W / 2, y); y += lh; });
+    g.fillStyle = '#E9C766'; g.font = '500 34px "Cormorant Garamond", serif';
+    g.fillText(x.by ? `— ${x.by}` : `— ${x.story || 'Basil Ruffletum'}`, W / 2, H - 175);
+    g.fillStyle = '#A8956A'; g.font = '600 22px "Bricolage Grotesque", sans-serif';
+    spaced(`BRIEF CASES${x.vol ? ` · VOLUME ${x.vol}` : ''}`, H - 120);
+    return new Promise((res) => cv.toBlob(res, 'image/png'));
+  }
+  function cardSheet() {
+    if (!P.card) return '';
+    return `<div class="pg-sheet" role="dialog" aria-modal="true" aria-label="Quote card">
+      <div class="pg-sheet-in">${P.card.url ? `<img src="${P.card.url}" alt="Quote card">` : '<div class="pg-wait small"><span class="pg-bulb-spin"></span></div>'}
+      <div class="pg-row">${P.card.url ? `${navigator.canShare ? '<button type="button" class="pg-gold" data-act="pg-card-share">Share</button>' : ''}<button type="button" class="pg-ghost" data-act="pg-card-save">Save image</button>` : ''}
+      <button type="button" class="pg-ghost" data-act="pg-card-close">Close</button></div></div></div>`;
+  }
+
+  // ---------- mood picker ----------
+  function moodPool(m) {
+    const fin = (kinds) => all('finest').filter((f) => kinds.includes(f.kind)).map((f) => ({ ...f, k: 'finest' }));
+    const mv = (fn) => all('moving').filter(fn).map((x) => ({ ...x, k: 'moving' }));
+    if (m === 'laugh') return all('funniest').map((x) => ({ ...x, k: 'funniest' }));
+    if (m === 'lift') return [...(P.canon?.pep_talks || []).map((t) => ({ text: t, k: 'pep' })), ...fin(['wisdom', 'tenderness'])];
+    if (m === 'lump') return mv((x) => x.intensity >= 4);
+    if (m === 'courage') return [...mv((x) => ['courage', 'loyalty', 'sacrifice', 'redemption'].includes(x.feeling)), ...fin(['action'])];
+    return [...all('basilisms').map((x) => ({ ...x, k: 'basilisms' })), ...all('epigraphs').map((x) => ({ ...x, k: 'epigraphs' }))];
+  }
+  function moodPanel() {
+    const x = P.moodItem;
+    return `<section class="pg-panel pg-mood">
+      <h2>What do you need right now?</h2>
+      <div class="pg-chips">${MOODS.map(([k, l]) => `<button type="button" class="${P.mood === k ? 'on' : ''}" data-act="pg-mood" data-v="${k}">${l}</button>`).join('')}</div>
+      ${x ? `<div class="pg-mood-out${x.k === 'moving' ? ' heart' : ''}">
+        ${x.k === 'moving' ? moment(x) : x.k === 'pep' ? `<p class="pg-mirror">${esc(x.text)}</p>` : `<blockquote>${x.k === 'epigraphs' ? '“' : ''}${esc(x.quote)}${x.k === 'epigraphs' ? '”' : ''}</blockquote>
+          <p class="pg-src">${x.by ? `— ${esc(x.by)} · ` : ''}${esc(x.story)} · Vol. ${x.vol}</p>${x.why ? `<p class="pg-why">${esc(x.why)}</p>` : ''}${tools(x, x.k)}`}
+        <div class="pg-row"><button type="button" class="pg-ghost" data-act="pg-mood" data-v="${P.mood}">Another</button></div></div>` : ''}</section>`;
+  }
+
+  // ---------- Line of the day (Today page) ----------
+  async function loadDaily() {
+    const today = DAY();
+    try { const c = JSON.parse(localStorage.getItem('lp-pg-daily') || 'null'); if (c?.date === today) { P.daily = c.item; render(); return; } } catch { /* ignore */ }
+    try {
+      const { data } = await sb.from('playground').select('item_id,story:data->>story,vol:data->>volNum,funniest:data->funniest,basilisms:data->basilisms,finest:data->finest').eq('kind', 'story').order('item_id');
+      const pool = (data || []).flatMap((r) => [...(r.funniest || []).map((f) => f.quote), ...(r.basilisms || []), ...(r.finest || []).map((f) => f.quote)]
+        .map((q) => ({ quote: q, story: r.story, vol: Number(r.vol), itemId: r.item_id })));
+      if (!pool.length) { P.daily = null; return; }
+      const n = Math.floor(Date.parse(today) / 864e5);
+      P.daily = pool[(n * 7919) % pool.length];
+      try { localStorage.setItem('lp-pg-daily', JSON.stringify({ date: today, item: P.daily })); } catch { /* ignore */ }
+    } catch (e) { console.error(e); P.daily = null; }
+    render();
+  }
+  function todayLine() {
+    if (P.daily === undefined) { P.daily = null; loadDaily(); return ''; }
+    const x = P.daily; if (!x) return '';
+    return `<section class="pg-today" aria-label="Basil's line for today">
+      <p class="pg-today-k">✦ Basil’s line for today</p>
+      <blockquote>${esc(x.quote)}</blockquote>
+      <p class="pg-today-s">${esc(x.story)} · Vol. ${x.vol}</p>
+      <div class="pg-today-b"><button type="button" class="link sm" data-act="pg-today-read">Read it in place</button><button type="button" class="link sm" data-act="pg-open">Visit the Playground</button></div></section>`;
+  }
+
+  // ----- The Cast -----
+  function linesWith(name) {
+    const re = new RegExp(`\\b${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`);
+    return [...all('funniest').map((x) => ({ ...x, k: 'funniest' })), ...all('finest').map((x) => ({ ...x, k: 'finest' })), ...all('basilisms').map((x) => ({ ...x, k: 'basilisms' }))]
+      .filter((x) => re.test(x.quote));
+  }
+  function viewCast() {
+    const E = P.extras;
+    if (!E?.characters?.length) return `<section class="pg-panel"><h2>The Cast</h2><p>The editor hasn’t gathered the recurring cast yet.</p>
+      ${P.building ? progress() : `<button type="button" class="pg-gold" data-act="pg-extras">Gather the cast and the atlas</button>`}</section>`;
+    // the partnership timeline: each story's strongest moment that is about the two of them
+    const best = {};
+    all('moving').filter((m) => m.intensity >= 4 && /\bLiss\b/.test(`${m.passage} ${m.setup}`) && /\bBasil\b/.test(`${m.passage} ${m.setup}`))
+      .forEach((m) => { if (!best[m.itemId] || m.intensity > best[m.itemId].intensity) best[m.itemId] = m; });
+    const numOf = (id) => P.stories.find((s) => s.itemId === id)?.num || 0;
+    const liss = Object.values(best).sort((a, b) => a.vol - b.vol || numOf(a.itemId) - numOf(b.itemId));
+    return `${E.duo ? `<section class="pg-panel pg-duo"><p class="pg-kick">The partnership</p><h2>${esc(E.duo.title)}</h2><p>${esc(E.duo.overview)}</p>
+      ${liss.length ? `<h3 class="pg-tl-h">Their story, moment by moment</h3><ol class="pg-tl">${(P.tlAll ? liss : liss.slice(0, 6)).map((m) => `<li><span class="pg-tl-v">Vol. ${m.vol}</span>
+        <b>${esc(m.title)}</b><span class="pg-tl-s">${esc(m.story)} · ${FEEL_LABEL[m.feeling] || m.feeling}</span><p>${esc(m.setup || '')}</p>${tools({ ...m }, 'moving', 'Read the moment ›')}</li>`).join('')}</ol>
+      ${liss.length > 6 ? `<button type="button" class="pg-ghost" data-act="pg-tl">${P.tlAll ? 'Show fewer' : `Show all ${liss.length} moments`}</button>` : ''}` : ''}</section>` : ''}
+      <div class="pg-castlist">${E.characters.map((c, i) => {
+        const open = P.castOpen === i; const lines = open ? linesWith(c.key).slice(0, 4) : [];
+        return `<article class="pg-char${open ? ' open' : ''}">
+          <button type="button" class="pg-char-h" data-act="pg-char" data-i="${i}" aria-expanded="${open}">
+            <span class="pg-char-n">${esc(c.name)}</span><span class="pg-char-r">${esc(c.role)} · ${c.appearances?.length || 0} cases</span>
+            <span class="pg-char-t">${esc(c.tagline)}</span></button>
+          ${open ? `<div class="pg-char-b"><p>${esc(c.portrait)}</p><h3>Across the canon</h3><p>${esc(c.arc)}</p>
+            <h3>${i === 0 ? 'What makes him tick' : 'With Basil'}</h3><p>${esc(c.with_basil)}</p>
+            ${lines.length ? `<h3>Lines</h3>${lines.map((x) => `<blockquote>${esc(x.quote)}</blockquote><p class="pg-src">${esc(x.story)} · Vol. ${x.vol}</p>${tools(x, x.k)}`).join('')}` : ''}
+            ${c.appearances?.length ? `<h3>Appears in</h3><div class="pg-appear">${c.appearances.map((a) => { const st = P.stories.find((s) => s.story === a.story);
+              return st ? `<button type="button" data-act="pg-read" data-id="${st.itemId}">Vol. ${a.vol} · ${esc(a.story.replace(/^Basil Ruff?letum & /, ''))}</button>` : ''; }).join('')}</div>` : ''}</div>` : ''}
+        </article>`; }).join('')}</div>`;
+  }
+
+  // ----- The Atlas -----
+  function viewAtlas() {
+    const A = P.extras?.atlas;
+    if (!A?.length) return `<section class="pg-panel"><h2>The Atlas</h2><p>The places haven’t been plotted yet.</p>
+      ${P.building ? progress() : `<button type="button" class="pg-gold" data-act="pg-extras">Gather the cast and the atlas</button>`}</section>`;
+    const byC = {}; A.forEach((p) => { (byC[p.country] ||= []).push(p); });
+    const nStories = new Set(A.flatMap((p) => p.items)).size;
+    return `<p class="pg-intro">${A.length} places in ${Object.keys(byC).length} countries, across ${nStories} cases. Tap a light.</p>
+      <div id="pg-map" class="pg-map" aria-label="Map of every place in the canon"></div>
+      <div class="pg-countries">${Object.entries(byC).sort((a, b) => b[1].length - a[1].length).map(([c, ps]) => `<div><b>${esc(c)}</b><span>${ps.map((p) => esc(p.label)).join(' · ')}</span></div>`).join('')}</div>`;
+  }
+  let leafletP = null;
+  function leaflet() {
+    if (window.L) return Promise.resolve(window.L);
+    if (!leafletP) leafletP = new Promise((res, rej) => {
+      const css = document.createElement('link'); css.rel = 'stylesheet'; css.href = 'https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css'; document.head.appendChild(css);
+      const js = document.createElement('script'); js.src = 'https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js'; js.onload = () => res(window.L); js.onerror = rej; document.head.appendChild(js);
+    });
+    return leafletP;
+  }
+  async function drawMap() {
+    const el = document.getElementById('pg-map'); if (!el || el.dataset.ready) return; el.dataset.ready = '1';
+    let L; try { L = await leaflet(); } catch { el.innerHTML = '<p class="pg-hint">The map needs a connection.</p>'; return; }
+    if (!document.body.contains(el)) return;
+    const map = L.map(el, { worldCopyJump: true, zoomControl: true, attributionControl: true }).setView(P.mapView?.c || [30, 10], P.mapView?.z || 2);
+    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 18, attribution: '© OpenStreetMap contributors' }).addTo(map);
+    map.on('moveend', () => { P.mapView = { c: map.getCenter(), z: map.getZoom() }; });
+    const spots = {};
+    for (const p of P.extras.atlas) { const k = `${p.lat.toFixed(1)},${p.lng.toFixed(1)}`; (spots[k] ||= { lat: p.lat, lng: p.lng, places: [] }).places.push(p); }
+    for (const s of Object.values(spots)) {
+      const ids = [...new Set(s.places.flatMap((p) => p.items))];
+      const m = L.circleMarker([s.lat, s.lng], { radius: 5 + 2.4 * Math.sqrt(ids.length), color: '#FFE7A0', weight: 1.5, fillColor: '#D4AF37', fillOpacity: 0.85, className: 'pg-pin' }).addTo(map);
+      const box = document.createElement('div'); box.className = 'pg-pop';
+      box.innerHTML = `<b>${esc(s.places.map((p) => p.label).filter((v, i, a) => a.indexOf(v) === i).join(' · '))}</b><small>${esc(s.places[0].country)}</small>`;
+      ids.forEach((id) => { const st = P.stories.find((x) => x.itemId === id); if (!st) return;
+        const b = document.createElement('button'); b.type = 'button'; b.textContent = `${st.story.replace(/^Basil Ruff?letum & /, '')} · Vol. ${st.volNum}`;
+        b.addEventListener('click', () => { P.open = false; document.body.classList.remove('rit-open'); openStory(id); }); box.appendChild(b); });
+      m.bindPopup(box, { className: 'pg-popup', maxWidth: 260 });
+    }
+  }
+  function afterRender() { if (P.open && P.tab === 'atlas') drawMap(); }
 
   // ----- The Show -----
   function viewShow() {
@@ -147,25 +356,27 @@ export function createPlayground({ sb, esc, render, openStory }) {
       ${bench ? `<p class="pg-brag">That’s more words than <b>${bench[1]}</b>. Read aloud at a steady pace, that’s about ${fmt(t.hours)} hours of Basil.</p>` : ''}
       ${blurbs.length ? `<div class="pg-ticker" aria-label="Imagined blurbs"><div class="pg-ticker-in">${[...blurbs, ...blurbs].map((b) => `<span>“${esc(b.text)}” <em>— ${esc(b.persona)}</em></span>`).join('<i>✦</i>')}</div></div>` : ''}
 
+      ${moodPanel()}
+
       <section class="pg-panel pg-slot">
         <h2>Pull the lever</h2>
         <p class="pg-hint">A random line from somewhere in the canon. Every one a winner.</p>
         <div class="pg-reel${P.spin ? ' spin' : ''}"><blockquote>${esc(q.quote)}</blockquote>
           <p class="pg-src">${esc(q.story)} · Vol. ${q.vol}</p>${q.why ? `<p class="pg-why">${esc(q.why)}</p>` : ''}</div>
-        <div class="pg-row"><button type="button" class="pg-gold" data-act="pg-lever">Pull again ✦</button><button type="button" class="pg-ghost" data-act="pg-read" data-id="${q.itemId}">Open the story</button></div>
+        <div class="pg-row"><button type="button" class="pg-gold" data-act="pg-lever">Pull again ✦</button>${tools(q, 'funniest', 'Open it in the story ›')}</div>
       </section>
 
       ${epi ? `<section class="pg-panel pg-epi">
         <h2>From Basil’s Book of Quotations</h2>
         <blockquote>“${esc(epi.quote)}”</blockquote><p class="pg-src">— ${esc(epi.by)}</p>
         <p class="pg-hint">${esc(epi.story)}, ${esc(epi.chapter || '')}. One of ${ep.length} chapter epigraphs.</p>
-        <button type="button" class="pg-ghost" data-act="pg-epi">Another ✦</button></section>` : ''}
+        <div class="pg-row"><button type="button" class="pg-ghost" data-act="pg-epi">Another ✦</button>${tools(epi, 'epigraphs')}</div></section>` : ''}
 
       ${lumpPanel()}
 
       ${P.canon?.pep_talks?.length ? `<section class="pg-panel pg-dressing">
-        <h2>Dressing-room mirror</h2>${P.canon.pep_talks.slice(0, 3).map((x) => `<p class="pg-mirror">${esc(x)}</p>`).join('')}
-        <p class="pg-hint">Tap “Hype me up” any time for more.</p></section>` : ''}
+        <h2>Dressing-room mirror</h2>${(P.mirror || (P.mirror = shuffle(P.canon.pep_talks).slice(0, 3))).map((x) => `<p class="pg-mirror">${esc(x)}</p>`).join('')}
+        <div class="pg-row"><button type="button" class="pg-ghost" data-act="pg-mirror">Another ✦</button></div></section>` : ''}
 
       ${reviewDeck()}
       ${passport()}`;
@@ -187,7 +398,7 @@ export function createPlayground({ sb, esc, render, openStory }) {
       ${m.setup ? `<p class="pg-m-setup">${esc(m.setup)}</p>` : ''}
       <blockquote>${esc(m.passage)}</blockquote>
       <figcaption>${esc(m.story)} · Vol. ${m.vol}${full && m.why ? `<em>${esc(m.why)}</em>` : ''}</figcaption>
-      <button type="button" class="pg-link" data-act="pg-read" data-id="${m.itemId}">Read the story ›</button></figure>`;
+      ${tools(m, 'moving', 'Read it in the story ›')}</figure>`;
   }
   function viewHeart() {
     const list = all('moving');
@@ -237,7 +448,7 @@ export function createPlayground({ sb, esc, render, openStory }) {
       <div class="pg-wall">${shown.map((x, i) => `<figure class="pg-card" style="--d:${(i % 12) * 40}ms">
         <blockquote>${P.hall === 'epigraphs' ? '“' : ''}${esc(x.quote)}${P.hall === 'epigraphs' ? '”' : ''}</blockquote>
         <figcaption>${x.by ? `— ${esc(x.by)}<br>` : ''}${x.kind ? `<span class="pg-kind">${KIND_LABEL[x.kind] || x.kind}</span> ` : ''}${esc(x.story)} · Vol. ${x.vol}${x.why ? `<em>${esc(x.why)}</em>` : ''}</figcaption>
-        <button type="button" class="pg-link" data-act="pg-read" data-id="${x.itemId}">Read it ›</button></figure>`).join('') || '<p class="pg-hint">Nothing here for this volume yet.</p>'}</div>`;
+        ${tools(x, P.hall === 'basil' ? 'basilisms' : P.hall)}</figure>`).join('') || '<p class="pg-hint">Nothing here for this volume yet.</p>'}</div>`;
   }
   const volChips = () => `<div class="pg-chips small">${[0, 1, 2, 3, 4, 5].map((v) => `<button type="button" class="${P.vol === v ? 'on' : ''}" data-act="pg-vol" data-v="${v}">${v ? `Vol. ${v}` : 'All volumes'}</button>`).join('')}</div>`;
 
@@ -326,9 +537,9 @@ export function createPlayground({ sb, esc, render, openStory }) {
   // ---------- events ----------
   function onClick(act, el) {
     switch (act) {
-      case 'pg-open': P.open = true; P.tab = 'show'; P.lever = null; P.epi = null; P.moment = null; P.review = Math.floor(Math.random() * 50);
+      case 'pg-open': P.open = true; P.tab = 'show'; P.lever = null; P.epi = null; P.moment = null; P.mirror = null; P.mood = null; P.moodItem = null; P.review = Math.floor(Math.random() * 50);
         document.body.classList.add('rit-open'); if (!P.stories) load(); render(); setTimeout(() => { countUp(); confetti(30); }, 60); return true;
-      case 'pg-close': P.open = false; P.pep = null; document.body.classList.remove('rit-open'); render(); return true;
+      case 'pg-close': P.open = false; P.pep = null; P.card = null; document.body.classList.remove('rit-open'); render(); return true;
       case 'pg-tab': { P.tab = el.dataset.v; render(); const pg = document.querySelector('.pg'); const mq = document.querySelector('.pg-marquee'); if (pg && mq && pg.scrollTop > mq.offsetHeight) pg.scrollTop = mq.offsetHeight + 40; } if (P.tab === 'show') setTimeout(countUp, 30); return true;
       case 'pg-lever': {
         P.spin = true; render();
@@ -343,7 +554,25 @@ export function createPlayground({ sb, esc, render, openStory }) {
       case 'pg-vol': P.vol = Number(el.dataset.v); render(); return true;
       case 'pg-award': { const i = Number(el.dataset.i); if (!P.award.has(i)) { P.award.add(i); render(); confetti(35); } else { P.award.delete(i); render(); } return true; }
       case 'pg-case': P.expanded = P.expanded === el.dataset.id ? null : el.dataset.id; render(); return true;
-      case 'pg-read': P.open = false; document.body.classList.remove('rit-open'); openStory(el.dataset.id); return true;
+      case 'pg-read': { const x = el.dataset.k ? (P.reg[el.dataset.k] || P.favs.get(el.dataset.k)?.data) : null;
+        P.open = false; document.body.classList.remove('rit-open'); openStory(x ? x.itemId : el.dataset.id, x ? textOf(x) : null); return true; }
+      case 'pg-back': P.open = true; document.body.classList.add('rit-open'); if (!P.stories) load(); render(); return true;
+      case 'pg-today-read': if (P.daily) openStory(P.daily.itemId, P.daily.quote); return true;
+      case 'pg-fav': toggleFav(el.dataset.k); return true;
+      case 'pg-card': { const x = P.reg[el.dataset.k] || P.favs.get(el.dataset.k)?.data; if (!x) return true;
+        P.card = { x }; render(); makeCard(x).then((blob) => { if (!P.card) return; P.card.blob = blob; P.card.url = URL.createObjectURL(blob); render(); }); return true; }
+      case 'pg-card-close': if (P.card?.url) URL.revokeObjectURL(P.card.url); P.card = null; render(); return true;
+      case 'pg-card-save': { const a = document.createElement('a'); a.href = P.card.url; a.download = `basil-${Date.now()}.png`; document.body.appendChild(a); a.click(); a.remove(); return true; }
+      case 'pg-card-share': { const f = new File([P.card.blob], 'basil.png', { type: 'image/png' });
+        if (navigator.canShare?.({ files: [f] })) navigator.share({ files: [f] }).catch(() => {}); else onClick('pg-card-save'); return true; }
+      case 'pg-mood': { const pool = moodPool(el.dataset.v); P.mood = el.dataset.v; let x = pick(pool);
+        if (pool.length > 1) while (x && P.moodItem && textOf(x) === textOf(P.moodItem)) x = pick(pool);
+        P.moodItem = x || null; render(); return true; }
+      case 'pg-mirror': { const prev = new Set(P.mirror || []); const fresh = shuffle((P.canon?.pep_talks || []).filter((t) => !prev.has(t)));
+        P.mirror = (fresh.length >= 3 ? fresh : shuffle(P.canon?.pep_talks || [])).slice(0, 3); render(); return true; }
+      case 'pg-char': { const i = Number(el.dataset.i); P.castOpen = P.castOpen === i ? null : i; render(); return true; }
+      case 'pg-extras': refreshExtras(); return true;
+      case 'pg-tl': P.tlAll = !P.tlAll; render(); return true;
       case 'pg-build': build(); return true;
       case 'pg-recanon': refreshCanon(); return true;
       case 'pg-hype': {
@@ -365,5 +594,5 @@ export function createPlayground({ sb, esc, render, openStory }) {
       <span class="pg-entry-bulbs" aria-hidden="true">${'<i></i>'.repeat(9)}</span>
       <span class="pg-entry-t">Visit the Playground</span><span class="pg-entry-s">Starring Basil Ruffletum ✦</span></button>`;
   }
-  return { entry, overlay, onClick, onChange, isOpen: () => P.open };
+  return { entry, overlay, onClick, onChange, afterRender, todayLine, isOpen: () => P.open };
 }

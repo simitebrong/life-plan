@@ -5,6 +5,7 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 // action "story": reads one story in full and pulls out its best material. Every quote is checked
 //   word for word against the text, so only his real lines ever appear.
 // action "heart": reads one story again for its most moving passages and adds them to that story's entry.
+// action "extras": finds the recurring cast (by searching every story's text) and writes dossiers, plus maps every place.
 // action "canon": reads all the story findings and writes the canon-wide pieces.
 // Called by the app with the user's JWT, or by an admin call with the cron secret (+ userId).
 
@@ -180,6 +181,75 @@ async function runCanon(uid: string, sec: Record<string, string>) {
   return { ok: true };
 }
 
+const CAST_SCHEMA = S({
+  characters: arr(S({ name: str, role: str, tagline: str, portrait: str, arc: str, with_basil: str })),
+  duo: S({ title: str, overview: str }),
+});
+const CAST_PROMPT = `You are a warm, perceptive editor writing character dossiers for Simon's "Basil Ruffletum: Brief Cases" comic-adventure series, for a private celebration page.
+You get the recurring characters (found by searching every story), with how often they appear, editor's notes from each story and the most moving moments they are part of. Entries are grouped by name, so a group can mix different people who share a name (e.g. two different Hectors): only write dossiers for genuinely recurring characters (the same person across stories); if a group mixes people, write about the one who genuinely recurs or skip it. Give each character's usual name only, with no brackets or lists of variants. Basil Ruffletum himself comes first.
+Be specific and true to the notes, in British English: name stories and moments. Never invent plot you weren't given.
+- characters: up to 10, most important first. role: a few words. tagline: one witty line. portrait: one paragraph on who they are and what they bring. arc: one paragraph on how they change across the canon. with_basil: one or two sentences on their dynamic with Basil (for Basil himself, what makes him tick).
+- duo: Basil and Liss as a partnership. title: a short name for the pairing; overview: one paragraph on how their relationship grows across the canon.`;
+
+const ATLAS_SCHEMA = S({ places: arr(S({ i: int, label: str, country: str, lat: { type: "number" }, lng: { type: "number" }, real: { type: "boolean" } })) });
+const ATLAS_PROMPT = `For each place name given (settings from a comic-adventure series), return its location for a world map.
+- i: the number given with the place. label: a short display name (e.g. "Brussels"). country: the country (or "At sea" etc.).
+- lat/lng: decimal coordinates of the place, or of the nearest real city or region it sits in (e.g. a named hotel or museum gets its city's coordinates). For places at sea or in the air, use the nearest sensible point.
+- real: false only if the place is entirely fictional with no real-world anchor (then give your best guess of the region it is set in, or 0,0).`;
+
+async function runExtras(uid: string, sec: Record<string, string>) {
+  const { data: rows } = await admin.from("playground").select("item_id,data").eq("user_id", uid).eq("kind", "story");
+  const stories = (rows ?? []).map((r: any) => ({ itemId: r.item_id, ...r.data })).sort((a: any, b: any) => a.volNum - b.volNum || a.num - b.num);
+  if (!stories.length) throw new Error("no stories analysed yet");
+  // full texts, to count real appearances
+  const texts: Record<string, string> = {};
+  for (const st of stories) {
+    const { data: it } = await admin.from("library_items").select("content").eq("id", st.itemId).single();
+    texts[st.itemId] = ((it?.content?.chapters ?? []) as any[]).flatMap((c) => (c.paras || []).map(unhtml)).join("\n");
+  }
+  const TITLES = new Set(["Inspector", "Madame", "Monsieur", "Mr", "Mrs", "Ms", "Miss", "Dr", "Doctor", "Lord", "Lady", "Sir", "Dame", "Captain", "Professor", "Detective", "Chief", "Sergeant", "Don", "Doña", "Señor", "Señora", "Signor", "Herr", "Frau", "Father", "Brother", "Sister", "Colonel", "Major", "General", "Count", "Countess", "Baron", "Baroness", "Duke", "Duchess", "Prince", "Princess", "King", "Queen", "Uncle", "Aunt", "The"]);
+  const clean = (n: string) => n.replace(/\(.*?\)/g, "").trim();
+  const groups: Record<string, { names: Set<string>; notes: any[] }> = {};
+  for (const st of stories) for (const c of st.characters || []) {
+    const n = clean(c.name || ""); const toks = n.split(/\s+/);
+    const first = TITLES.has(toks[0].replace(/\.$/, "")) && toks[1] ? toks[1] : toks[0];
+    if (!first || first.length < 3 || !/^[A-Z]/.test(first)) continue;
+    (groups[first] ||= { names: new Set(), notes: [] }).names.add(n);
+    groups[first].notes.push({ story: st.story, note: c.note });
+  }
+  const esc = (x: string) => x.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const cast = Object.entries(groups).map(([first, g]) => {
+    const re = new RegExp(`\\b${esc(first)}\\b`, "g");
+    const appearances = stories.map((st: any) => ({ story: st.story, vol: st.volNum, num: st.num, mentions: (texts[st.itemId].match(re) || []).length }))
+      .filter((a: any) => a.mentions >= 3);
+    const one = new RegExp(`\\b${esc(first)}\\b`);
+    const moving = stories.flatMap((st: any) => (st.moving || []).filter((m: any) => one.test(m.passage) || one.test(m.setup)).map((m: any) => `${st.story}: ${m.title}`));
+    return { key: first, names: [...g.names], appearances, notes: g.notes, moving };
+  }).filter((c) => c.appearances.length >= 3).sort((a, b) => b.appearances.length - a.appearances.length).slice(0, 14);
+  const places = [...new Set(stories.flatMap((st: any) => st.places || []))];
+  const [castR, atlasR] = await Promise.all([
+    ai(sec, CAST_PROMPT, JSON.stringify(cast.map((c) => ({ ...c, appearances: c.appearances.map((a: any) => `${a.story} (Vol ${a.vol}, ${a.mentions} mentions)`) }))), CAST_SCHEMA, "cast"),
+    ai(sec, ATLAS_PROMPT, places.map((p, i) => `${i}: ${p}`).join("\n"), ATLAS_SCHEMA, "atlas"),
+  ]);
+  // attach the counted appearances to each dossier
+  const characters = (castR.characters ?? []).map((ch: any) => {
+    const name = clean(ch.name).split(/\s*\/\s*/)[0]; const toks = name.split(/\s+/);
+    const keys = [toks[0], toks[1], toks[toks.length - 1]].filter(Boolean);
+    const c = keys.map((k) => cast.find((x) => x.key === k)).find(Boolean);
+    return { ...ch, name, key: c?.key ?? toks[0], appearances: c?.appearances ?? [] };
+  });
+  const byPlace: Record<string, string[]> = {};
+  for (const st of stories) for (const pl of st.places || []) (byPlace[pl] ||= []).push(st.itemId);
+  const atlas = (atlasR.places ?? []).map((p: any) => ({ ...p, place: places[p.i] }))
+    .filter((p: any) => p.place && byPlace[p.place] && Math.abs(p.lat) <= 90 && Math.abs(p.lng) <= 180 && !(p.lat === 0 && p.lng === 0))
+    .map((p: any) => ({ ...p, items: [...new Set(byPlace[p.place])] }));
+  const data = { characters, duo: castR.duo, atlas };
+  await admin.from("playground").delete().eq("user_id", uid).eq("kind", "extras");
+  const { error } = await admin.from("playground").insert({ user_id: uid, kind: "extras", data, model: sec.openai_model || "gpt-5-mini" });
+  if (error) throw error;
+  return { ok: true, characters: characters.length, places: atlas.length };
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   const json = (o: unknown, status = 200) => new Response(JSON.stringify(o), { status, headers: { ...cors, "Content-Type": "application/json" } });
@@ -198,6 +268,7 @@ Deno.serve(async (req) => {
     if (body.action === "story") return json({ ok: true, ...(await runStory(uid, body.itemId, sec)) });
     if (body.action === "heart") return json({ ok: true, ...(await runHeart(uid, body.itemId, sec)) });
     if (body.action === "canon") return json(await runCanon(uid, sec));
+    if (body.action === "extras") return json(await runExtras(uid, sec));
     return json({ error: "unknown action" }, 400);
   } catch (e) {
     console.error(e);
