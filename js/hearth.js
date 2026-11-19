@@ -33,10 +33,11 @@ const STEPS = [
 ];
 const TOTAL = STEPS.reduce((s, x) => s + x.secs, 0);
 const CACHE = 'lp-hearth';
+const META = '.arrangement.json';
 const OUTCOMES = [['successful', 'Held it', 'Rode every wave'], ['brief', 'Brief', 'A shorter session'], ['ruin', 'Tipped over', 'It happens. Next time.']];
 
 export function createHearth({ sb, esc, render, getOutcome, setOutcome, dayLabel }) {
-  const H = { open: false, step: -1, left: 0, running: false, pics: null, idx: 0, veiled: true, msg: '', busy: false };
+  const H = { open: false, step: -1, left: 0, running: false, pics: null, idx: 0, veiled: true, msg: '', busy: false, arrange: false, pos: {}, order: [] };
   let timer = null; let lock = null; let audio = null; let last = 0; let uid = null;
 
   // ---------- photos (private storage, cached on this phone) ----------
@@ -48,7 +49,12 @@ export function createHearth({ sb, esc, render, getOutcome, setOutcome, dayLabel
       const dir = await folder(); if (!dir) return;
       const { data, error } = await sb.storage.from('library').list(dir, { limit: 200, sortBy: { column: 'created_at', order: 'desc' } });
       if (error) throw error;
-      const names = (data || []).filter((f) => f.name && !f.name.startsWith('.')).map((f) => f.name);
+      let names = (data || []).filter((f) => f.name && !f.name.startsWith('.')).map((f) => f.name);
+      if ((data || []).some((f) => f.name === META)) {
+        try { const { data: blob } = await sb.storage.from('library').download(`${dir}/${META}`); const m = JSON.parse(await blob.text()); H.pos = m.pos || {}; H.order = m.order || []; } catch { /* keep defaults */ }
+      }
+      const rank = (n) => { const i = H.order.indexOf(n); return i < 0 ? -1 : i; }; // new photos (not yet arranged) come first, newest first
+      names = names.map((n, i) => [n, i]).sort((a, b) => (rank(a[0]) - rank(b[0])) || (a[1] - b[1])).map(([n]) => n);
       const c = 'caches' in window ? await caches.open(CACHE) : null;
       const out = []; const need = [];
       for (const n of names) {
@@ -80,7 +86,7 @@ export function createHearth({ sb, esc, render, getOutcome, setOutcome, dayLabel
         if (c) await c.put(`/__hearth/${n}`, new Response(f, { headers: { 'Content-Type': f.type || 'image/jpeg' } }));
         (H.pics ||= []).unshift({ name: n, url: URL.createObjectURL(f) });
       }
-      H.idx = 0; H.msg = '';
+      H.idx = 0; H.msg = ''; saveMeta();
     } catch (e) { console.error(e); H.msg = 'Some photos didn’t save. Check your connection and try again.'; }
     H.busy = false; redraw();
   }
@@ -90,10 +96,48 @@ export function createHearth({ sb, esc, render, getOutcome, setOutcome, dayLabel
       const dir = await folder();
       await sb.storage.from('library').remove([`${dir}/${p.name}`]);
       if ('caches' in window) await (await caches.open(CACHE)).delete(`/__hearth/${p.name}`);
-      URL.revokeObjectURL(p.url); H.pics.splice(i, 1); H.idx = Math.min(H.idx, Math.max(0, H.pics.length - 1)); H.confirm = null;
+      URL.revokeObjectURL(p.url); H.pics.splice(i, 1); H.idx = Math.min(H.idx, Math.max(0, H.pics.length - 1)); H.confirm = null; delete H.pos[p.name]; saveMeta();
     } catch (e) { console.error(e); H.msg = 'Couldn’t remove that one just now.'; }
     redraw();
   }
+
+  // ---------- arrangement: order + framing, kept as a small private file beside the photos ----------
+  let metaT = null;
+  function saveMeta() {
+    clearTimeout(metaT);
+    metaT = setTimeout(async () => {
+      try {
+        const dir = await folder(); if (!dir || !H.pics) return;
+        H.order = H.pics.map((p) => p.name);
+        const pos = Object.fromEntries(Object.entries(H.pos).filter(([n]) => H.order.includes(n)));
+        const body = new Blob([JSON.stringify({ order: H.order, pos })], { type: 'application/json' });
+        const { error } = await sb.storage.from('library').upload(`${dir}/${META}`, body, { upsert: true, contentType: 'application/json' });
+        if (error) throw error;
+      } catch (e) { console.error(e); H.msg = 'Couldn’t save the arrangement just now.'; redraw(); }
+    }, 500);
+  }
+  const posOf = (n) => H.pos[n] || { x: 50, y: 50, z: 1 };
+  const frame = (n) => { const { x, y, z } = posOf(n); return `object-position:${x}% ${y}%;transform-origin:${x}% ${y}%;transform:scale(${z})`; };
+  function move(i, to) {
+    if (to < 0 || to >= H.pics.length || to === i) return;
+    const [p] = H.pics.splice(i, 1); H.pics.splice(to, 0, p); H.idx = to; saveMeta();
+  }
+  // tap the big photo to centre on that spot; the zoom slider updates live without a redraw
+  document.addEventListener('click', (e) => {
+    const ed = e.target.closest('.hearth-edit'); if (!ed || !H.arrange) return;
+    const r = ed.getBoundingClientRect(); const p = H.pics[H.idx]; if (!p) return;
+    const z = posOf(p.name).z;
+    const x = Math.round(Math.min(100, Math.max(0, ((e.clientX - r.left) / r.width) * 100)));
+    const y = Math.round(Math.min(100, Math.max(0, ((e.clientY - r.top) / r.height) * 100)));
+    H.pos[p.name] = { x, y, z }; saveMeta(); redraw();
+  });
+  document.addEventListener('input', (e) => {
+    if (!e.target.matches('[data-hearth-zoom]') || !H.arrange) return;
+    const p = H.pics[H.idx]; if (!p) return;
+    H.pos[p.name] = { ...posOf(p.name), z: Number(e.target.value) };
+    const img = document.querySelector('.hearth-edit img'); if (img) img.style.cssText = frame(p.name);
+    saveMeta();
+  });
 
   // one picker that lives outside the app's redrawn area, so a redraw can never swallow the chosen photos
   let picker = null;
@@ -184,7 +228,7 @@ export function createHearth({ sb, esc, render, getOutcome, setOutcome, dayLabel
       <button type="button" class="rit-upload" data-act="hearth-add">Add photos</button>${H.msg ? `<p class="rit-msg">${esc(H.msg)}</p>` : ''}</div>`;
     const p = H.pics[H.idx];
     return `<div class="hearth-gal${small ? ' small' : ''}${H.veiled ? ' veiled' : ''}">
-      <button type="button" class="hearth-photo" data-act="hearth-veil" aria-label="${H.veiled ? 'Reveal photo' : 'Hide photo'}"><img src="${p.url}" alt="">${H.veiled ? '<span class="hearth-veil">Tap to reveal</span>' : ''}</button>
+      <button type="button" class="hearth-photo" data-act="hearth-veil" aria-label="${H.veiled ? 'Reveal photo' : 'Hide photo'}"><img src="${p.url}" alt="" style="${frame(p.name)}">${H.veiled ? '<span class="hearth-veil">Tap to reveal</span>' : ''}</button>
       ${H.pics.length > 1 ? `<button type="button" class="hearth-nav prev" data-act="hearth-pic" data-n="-1" aria-label="Previous photo">‹</button><button type="button" class="hearth-nav next" data-act="hearth-pic" data-n="1" aria-label="Next photo">›</button>
       <span class="hearth-count">${H.idx + 1} / ${H.pics.length}</span>` : ''}
     </div>`;
@@ -192,14 +236,33 @@ export function createHearth({ sb, esc, render, getOutcome, setOutcome, dayLabel
   function overlay() {
     if (!H.open) return '';
     const n = STEPS.length; let body;
-    if (H.step < 0) {
+    if (H.step < 0 && H.arrange && H.pics?.length) {
+      const p = H.pics[H.idx]; const { x, y, z } = posOf(p.name);
+      body = `<p class="rit-kicker">Hearth · Arrange photos</p>
+        <div class="hearth-edit" role="img" aria-label="Photo ${H.idx + 1}. Tap where you want it centred.">
+          <img src="${p.url}" alt="" style="${frame(p.name)}">
+          <span class="hearth-focus" style="left:${x}%;top:${y}%"></span>
+        </div>
+        <p class="hearth-tip">Tap the photo where you want it centred.</p>
+        <label class="hearth-zoom">Zoom <input type="range" min="1" max="2.5" step="0.05" value="${z}" data-hearth-zoom aria-label="Zoom"></label>
+        <div class="hearth-moves">
+          <button type="button" data-act="hearth-move" data-to="0" ${H.idx === 0 ? 'disabled' : ''}>Make first</button>
+          <button type="button" data-act="hearth-move" data-to="${H.idx - 1}" ${H.idx === 0 ? 'disabled' : ''} aria-label="Move earlier">‹ Earlier</button>
+          <button type="button" data-act="hearth-move" data-to="${H.idx + 1}" ${H.idx === H.pics.length - 1 ? 'disabled' : ''} aria-label="Move later">Later ›</button>
+          <button type="button" data-act="hearth-reset">Reset framing</button>
+        </div>
+        <div class="hearth-thumbs">${H.pics.map((q, i) => `<button type="button" class="${i === H.idx ? 'on' : ''}" data-act="hearth-pick" data-i="${i}" aria-label="Photo ${i + 1}">
+          <img src="${q.url}" alt="" style="${frame(q.name)}"><span>${i + 1}</span></button>`).join('')}</div>
+        ${H.msg ? `<p class="rit-msg">${esc(H.msg)}</p>` : ''}
+        <button type="button" class="rit-begin" data-act="hearth-arrange">Done</button>`;
+    } else if (H.step < 0) {
       body = `${gallery(false)}
         <p class="rit-kicker">Hearth · Desire, unhurried</p>
         <p class="rit-intent">Wanting her is nothing to hide. Here, you lean all the way in, and learn to hold the fire.</p>
         <ol class="rit-steps hearth-steps">${STEPS.map((s, i) => `<li><button type="button" data-act="hearth-step" data-i="${i}"><span class="hearth-n">${i + 1}</span>
           <span class="rit-st"><b>${esc(s.title)}</b><span>${esc(s.how[0])}</span></span><span class="rit-sec">${s.secs >= 60 ? `${Math.round(s.secs / 6) / 10} min` : `${s.secs}s`}</span></button></li>`).join('')}</ol>
         <button type="button" class="rit-begin" data-act="hearth-begin">Begin · ${Math.round(TOTAL / 60)} min</button>
-        ${H.pics?.length ? `<div class="rit-pics"><button type="button" class="rit-change" data-act="hearth-add">Add photos</button>
+        ${H.pics?.length ? `<div class="rit-pics"><button type="button" class="rit-change" data-act="hearth-add">Add photos</button><button type="button" class="rit-change" data-act="hearth-arrange">Arrange &amp; frame</button>
           ${H.confirm === H.idx ? `<button type="button" class="rit-change warn" data-act="hearth-del">Tap again to remove this photo</button>` : `<button type="button" class="rit-change" data-act="hearth-del-ask">Remove this photo</button>`}</div>` : ''}
         ${H.msg && H.pics?.length ? `<p class="rit-msg">${esc(H.msg)}</p>` : ''}
         <p class="rit-care">The screen hides your photos again whenever you leave the app.</p>`;
@@ -241,13 +304,17 @@ export function createHearth({ sb, esc, render, getOutcome, setOutcome, dayLabel
   function onClick(act, el) {
     switch (act) {
       case 'hearth-open': H.open = true; H.step = -1; H.veiled = true; H.msg = ''; document.body.classList.add('rit-open'); loadPics(); render(); return true;
-      case 'hearth-close': stop(); H.open = false; H.step = -1; H.veiled = true; H.confirm = null; document.body.classList.remove('rit-open'); render(); return true;
+      case 'hearth-close': stop(); H.open = false; H.arrange = false; H.step = -1; H.veiled = true; H.confirm = null; document.body.classList.remove('rit-open'); render(); return true;
       case 'hearth-begin': if (audio?.state === 'suspended') audio.resume(); H.veiled = false; startStep(0); return true;
       case 'hearth-step': startStep(Number(el.dataset.i)); return true;
       case 'hearth-next': if (H.step + 1 < STEPS.length) startStep(H.step + 1); else { stop(); H.step = STEPS.length; redraw(); } return true;
       case 'hearth-prev': startStep(Math.max(0, H.step - 1)); return true;
       case 'hearth-pause': H.running = !H.running; last = Date.now(); keepAwake(H.running); redraw(); return true;
       case 'hearth-add': choose(); return true;
+      case 'hearth-arrange': H.arrange = !H.arrange; H.confirm = null; redraw(); document.querySelector('.hearth')?.scrollTo(0, 0); return true;
+      case 'hearth-pick': H.idx = Number(el.dataset.i); redraw(); return true;
+      case 'hearth-move': move(H.idx, Number(el.dataset.to)); redraw(); return true;
+      case 'hearth-reset': if (H.pics?.[H.idx]) { delete H.pos[H.pics[H.idx].name]; saveMeta(); } redraw(); return true;
       case 'hearth-veil': H.veiled = !H.veiled; redraw(); return true;
       case 'hearth-pic': if (H.pics?.length) { H.idx = (H.idx + Number(el.dataset.n) + H.pics.length) % H.pics.length; H.confirm = null; } redraw(); return true;
       case 'hearth-del-ask': H.confirm = H.idx; redraw(); return true;

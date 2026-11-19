@@ -1011,3 +1011,22 @@ button.rit-change { background: none; border: 0; padding: 0; font: inherit; }
 @media (max-width: 420px) { .pg-meters { grid-template-columns: repeat(2, 1fr); } .pg-stat span { font-size: 10px; letter-spacing: .08em; } }
 @media (prefers-reduced-motion: reduce) { .pg *, .pg-entry * { animation: none !important; } }
 button.rit-upload { border: 0; font: inherit; font-weight: 700; }
+/* Hearth: arrange & frame */
+.hearth-photo img, .hearth-edit img, .hearth-thumbs img { aspect-ratio: 4 / 5; height: auto; }
+.hearth-photo { overflow: hidden; }
+.hearth-gal.veiled .hearth-photo img { transform: scale(1.08) !important; }
+.hearth-edit { position: relative; width: min(100%, 380px); margin: 8px auto 0; border-radius: 18px; overflow: hidden; background: #000; cursor: crosshair; touch-action: manipulation; }
+.hearth-edit img { display: block; width: 100%; max-height: 58vh; object-fit: cover; pointer-events: none; }
+.hearth-focus { position: absolute; width: 34px; height: 34px; margin: -17px 0 0 -17px; border-radius: 50%; border: 2px solid #FBEDE3; box-shadow: 0 0 0 2px rgb(22 5 9 / 0.5), 0 0 14px rgb(232 149 110 / 0.8); pointer-events: none; }
+.hearth-focus::after { content: ''; position: absolute; inset: 13px; border-radius: 50%; background: #E8956E; }
+.hearth-tip { text-align: center; color: #D9B6A4; font-size: 14px; margin: 10px 0 4px; }
+.hearth-zoom { display: flex; align-items: center; gap: 12px; justify-content: center; color: #F6E6DA; font-size: 14px; margin: 6px auto 12px; max-width: 380px; }
+.hearth-zoom input { flex: 1; accent-color: #E8956E; }
+.hearth-moves { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-bottom: 16px; }
+.hearth-moves button { padding: 9px 14px; border-radius: 999px; border: 1px solid rgb(242 165 126 / 0.45); background: rgb(232 149 110 / 0.1); color: #F6E6DA; font: inherit; font-size: 14px; cursor: pointer; }
+.hearth-moves button:disabled { opacity: 0.35; cursor: default; }
+.hearth-thumbs { display: grid; grid-template-columns: repeat(auto-fill, minmax(72px, 1fr)); gap: 8px; max-width: 380px; margin: 0 auto 20px; }
+.hearth-thumbs button { position: relative; padding: 0; border: 2px solid transparent; border-radius: 10px; overflow: hidden; background: #000; cursor: pointer; }
+.hearth-thumbs button.on { border-color: #E8956E; }
+.hearth-thumbs img { display: block; width: 100%; object-fit: cover; }
+.hearth-thumbs span { position: absolute; left: 4px; bottom: 4px; min-width: 18px; padding: 0 4px; border-radius: 9px; background: rgb(22 5 9 / 0.7); color: #FBEDE3; font-size: 11px; font-weight: 700; text-align: center; }
