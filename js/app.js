@@ -854,6 +854,8 @@ const hearth = createHearth({
   sb, esc, render: () => render(),
   getOutcome: () => entry().staminaTraining || null,
   setOutcome: (v) => setValue('staminaTraining', v),
+  getPin: () => S.settings.hearthPin || null,
+  setPin: (v) => { if (v) S.settings.hearthPin = v; else delete S.settings.hearthPin; saveSettings(); },
   dayLabel: () => (S.day === todayIso() ? 'today' : fmtShort(S.day)),
 });
 const playground = createPlayground({

@@ -36,9 +36,77 @@ const CACHE = 'lp-hearth';
 const META = '.arrangement.json';
 const OUTCOMES = [['successful', 'Held it', 'Rode every wave'], ['brief', 'Brief', 'A shorter session'], ['ruin', 'Tipped over', 'It happens. Next time.']];
 
-export function createHearth({ sb, esc, render, getOutcome, setOutcome, dayLabel }) {
-  const H = { open: false, step: -1, left: 0, running: false, pics: null, idx: 0, veiled: true, msg: '', busy: false, arrange: false, pos: {}, order: [] };
+export function createHearth({ sb, esc, render, getOutcome, setOutcome, dayLabel, getPin, setPin }) {
+  const H = { open: false, step: -1, left: 0, running: false, pics: null, idx: 0, veiled: true, msg: '', busy: false, arrange: false, pos: {}, order: [], locked: false, pin: '', pinMode: null, pinFirst: '', pinMsg: '', picking: false };
   let timer = null; let lock = null; let audio = null; let last = 0; let uid = null;
+
+  // ---------- PIN lock: a 4-digit PIN, stored only as a salted PBKDF2 hash in your synced settings ----------
+  const b64 = (buf) => btoa(String.fromCharCode(...new Uint8Array(buf)));
+  async function digest(pin, salt) {
+    const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(pin), 'PBKDF2', false, ['deriveBits']);
+    const bits = await crypto.subtle.deriveBits({ name: 'PBKDF2', hash: 'SHA-256', salt: Uint8Array.from(atob(salt), (c) => c.charCodeAt(0)), iterations: 150000 }, key, 256);
+    return b64(bits);
+  }
+  const hasPin = () => !!getPin?.()?.hash;
+  const FAIL_KEY = 'lp-hearth-fails';
+  const fails = () => { try { return JSON.parse(localStorage.getItem(FAIL_KEY) || '{"n":0,"until":0}'); } catch { return { n: 0, until: 0 }; } };
+  const setFails = (f) => { try { localStorage.setItem(FAIL_KEY, JSON.stringify(f)); } catch { /* ignore */ } };
+  function lockNow() { if (hasPin()) { H.locked = true; H.pin = ''; H.pinMode = 'unlock'; H.pinMsg = ''; } }
+  async function pinDigit(d) {
+    const f = fails(); if (H.pinMode === 'unlock' && f.until > Date.now()) return;
+    if (d === 'del') { H.pin = H.pin.slice(0, -1); redraw(); return; }
+    if (H.pin.length >= 4) return;
+    H.pin += d; H.pinMsg = ''; redraw();
+    if (H.pin.length < 4) return;
+    const entered = H.pin;
+    if (H.pinMode === 'unlock') {
+      const P = getPin();
+      if (await digest(entered, P.salt) === P.hash) { setFails({ n: 0, until: 0 }); H.locked = false; H.pinMode = null; H.pin = ''; if (navigator.vibrate) navigator.vibrate(12); loadPics(); redraw(); return; }
+      const n = f.n + 1; const wait = n >= 5 ? Math.min(15 * 60, 30 * 2 ** (n - 5)) : 0;
+      setFails({ n, until: wait ? Date.now() + wait * 1000 : 0 });
+      H.pin = ''; H.pinMsg = wait ? `Too many tries. Try again in ${wait >= 60 ? `${Math.round(wait / 60)} min` : `${wait} seconds`}.` : 'That’s not it. Try again.';
+      shake(); redraw(); if (wait) setTimeout(redraw, wait * 1000 + 50); return;
+    }
+    if (H.pinMode === 'set1') { H.pinFirst = entered; H.pin = ''; H.pinMode = 'set2'; redraw(); return; }
+    if (H.pinMode === 'set2') {
+      if (entered !== H.pinFirst) { H.pin = ''; H.pinFirst = ''; H.pinMode = 'set1'; H.pinMsg = 'Those didn’t match. Choose your PIN again.'; shake(); redraw(); return; }
+      const salt = b64(crypto.getRandomValues(new Uint8Array(16)));
+      setPin({ salt, hash: await digest(entered, salt), set: new Date().toISOString() });
+      H.pin = ''; H.pinFirst = ''; H.pinMode = null; H.locked = false; H.msg = 'PIN set. Hearth will ask for it every time it opens.'; redraw();
+    }
+  }
+  function shake() { if (navigator.vibrate) navigator.vibrate([30, 40, 30]); requestAnimationFrame(() => document.querySelector('.hearth-dots')?.classList.add('shake')); }
+  async function forgot() {
+    const pw = document.querySelector('[data-hearth-pw]')?.value || '';
+    if (!pw) { H.pinMsg = 'Enter your Life Plan password.'; redraw(); return; }
+    H.pinMsg = 'Checking…'; redraw();
+    const { data } = await sb.auth.getUser(); const email = data?.user?.email;
+    const { error } = email ? await sb.auth.signInWithPassword({ email, password: pw }) : { error: true };
+    if (error) { H.pinMsg = 'That password didn’t work.'; redraw(); return; }
+    setPin(null); setFails({ n: 0, until: 0 });
+    H.pin = ''; H.pinFirst = ''; H.pinMode = 'set1'; H.locked = false; H.pinMsg = 'Old PIN cleared. Choose a new one.'; redraw();
+  }
+  document.addEventListener('keydown', (e) => {
+    if (!H.open || !H.pinMode || e.target.matches?.('input')) return;
+    if (/^[0-9]$/.test(e.key)) { e.preventDefault(); pinDigit(e.key); } else if (e.key === 'Backspace') { e.preventDefault(); pinDigit('del'); }
+  });
+  function pinView() {
+    const f = fails(); const wait = H.pinMode === 'unlock' && f.until > Date.now();
+    const title = { unlock: 'Enter your PIN', set1: 'Choose a 4-digit PIN', set2: 'Enter it once more', forgot: 'Forgotten your PIN?' }[H.pinMode];
+    if (H.pinMode === 'forgot') return `<div class="hearth-lock">${FLAME_BIG}<p class="rit-kicker">Hearth</p><h2>${title}</h2>
+      <p class="hearth-lock-sub">Enter your Life Plan account password to clear it, then choose a new one.</p>
+      <input type="password" class="hearth-pw" data-hearth-pw autocomplete="current-password" aria-label="Account password">
+      <button type="button" class="rit-begin" data-act="hearth-forgot-go">Clear my PIN</button>
+      ${H.pinMsg ? `<p class="rit-msg">${esc(H.pinMsg)}</p>` : ''}
+      <button type="button" class="rit-change" data-act="hearth-pin-cancel">Back</button></div>`;
+    return `<div class="hearth-lock">${FLAME_BIG}<p class="rit-kicker">Hearth</p><h2>${title}</h2>
+      <div class="hearth-dots" aria-live="polite" aria-label="${H.pin.length} of 4 digits entered">${[0, 1, 2, 3].map((i) => `<i class="${i < H.pin.length ? 'on' : ''}"></i>`).join('')}</div>
+      <p class="hearth-lock-msg" role="status">${esc(H.pinMsg || (H.pinMode === 'set1' ? 'You’ll need it every time you open Hearth.' : ''))}</p>
+      <div class="hearth-keys${wait ? ' wait' : ''}">${['1', '2', '3', '4', '5', '6', '7', '8', '9', '', '0', 'del'].map((k) => k === '' ? '<span></span>'
+        : `<button type="button" data-act="hearth-key" data-k="${k}" ${wait ? 'disabled' : ''} aria-label="${k === 'del' ? 'Delete' : k}">${k === 'del' ? '⌫' : k}</button>`).join('')}</div>
+      ${H.pinMode === 'unlock' ? `<button type="button" class="rit-change" data-act="hearth-forgot">Forgotten your PIN?</button>`
+        : `<button type="button" class="rit-change" data-act="hearth-pin-cancel">Cancel</button>`}</div>`;
+  }
 
   // ---------- photos (private storage, cached on this phone) ----------
   const folder = async () => { if (!uid) { const { data } = await sb.auth.getUser(); uid = data?.user?.id || null; } return uid ? `${uid}/hearth` : null; };
@@ -144,10 +212,10 @@ export function createHearth({ sb, esc, render, getOutcome, setOutcome, dayLabel
   function choose() {
     if (!picker) {
       picker = Object.assign(document.createElement('input'), { type: 'file', accept: 'image/*', multiple: true, hidden: true });
-      picker.addEventListener('change', () => { const files = [...(picker.files || [])]; picker.value = ''; if (files.length) addPics(files); });
+      picker.addEventListener('change', () => { H.picking = false; const files = [...(picker.files || [])]; picker.value = ''; if (files.length) addPics(files); });
       document.body.appendChild(picker);
     }
-    picker.click();
+    H.picking = true; picker.click();
   }
 
   // ---------- timer (same rhythm as the rituals) ----------
@@ -212,7 +280,10 @@ export function createHearth({ sb, esc, render, getOutcome, setOutcome, dayLabel
     if (!document.hidden || !H.open) return;
     H.veiled = true; document.querySelectorAll('.hearth-gal').forEach((g) => g.classList.add('veiled'));
     if (H.running) { H.running = false; keepAwake(false); const pp = document.querySelector('.hearth .rit-pp'); if (pp) pp.textContent = 'Resume'; }
+    // lock again on leaving (but not while the photo picker is open, which also hides the page)
+    if (hasPin() && !H.picking && H.pinMode !== 'set1' && H.pinMode !== 'set2' && H.pinMode !== 'forgot') { lockNow(); redraw(); }
   });
+  document.addEventListener('visibilitychange', () => { if (!document.hidden && H.picking) setTimeout(() => { H.picking = false; }, 1500); });
 
   // ---------- views ----------
   function entry() {
@@ -236,7 +307,9 @@ export function createHearth({ sb, esc, render, getOutcome, setOutcome, dayLabel
   function overlay() {
     if (!H.open) return '';
     const n = STEPS.length; let body;
-    if (H.step < 0 && H.arrange && H.pics?.length) {
+    if (H.pinMode) {
+      body = pinView();
+    } else if (H.step < 0 && H.arrange && H.pics?.length) {
       const p = H.pics[H.idx]; const { x, y, z } = posOf(p.name);
       body = `<p class="rit-kicker">Hearth · Arrange photos</p>
         <div class="hearth-edit" role="img" aria-label="Photo ${H.idx + 1}. Tap where you want it centred.">
@@ -265,7 +338,10 @@ export function createHearth({ sb, esc, render, getOutcome, setOutcome, dayLabel
         ${H.pics?.length ? `<div class="rit-pics"><button type="button" class="rit-change" data-act="hearth-add">Add photos</button><button type="button" class="rit-change" data-act="hearth-arrange">Arrange &amp; frame</button>
           ${H.confirm === H.idx ? `<button type="button" class="rit-change warn" data-act="hearth-del">Tap again to remove this photo</button>` : `<button type="button" class="rit-change" data-act="hearth-del-ask">Remove this photo</button>`}</div>` : ''}
         ${H.msg && H.pics?.length ? `<p class="rit-msg">${esc(H.msg)}</p>` : ''}
-        <p class="rit-care">The screen hides your photos again whenever you leave the app.</p>`;
+        <p class="rit-care">The screen hides your photos again whenever you leave the app.${hasPin() ? ' Hearth locks again too.' : ''}</p>
+        <div class="rit-pics">${hasPin()
+          ? `<button type="button" class="rit-change" data-act="hearth-pin-set">Change PIN</button>${H.confirmPin ? `<button type="button" class="rit-change warn" data-act="hearth-pin-off">Tap again to remove the PIN</button>` : `<button type="button" class="rit-change" data-act="hearth-pin-off-ask">Remove PIN</button>`}`
+          : `<button type="button" class="rit-change" data-act="hearth-pin-set">Lock Hearth with a PIN</button>`}</div>`;
     } else if (H.step >= n) {
       const cur = getOutcome();
       body = `${gallery(false)}
@@ -303,8 +379,16 @@ export function createHearth({ sb, esc, render, getOutcome, setOutcome, dayLabel
   // ---------- events ----------
   function onClick(act, el) {
     switch (act) {
-      case 'hearth-open': H.open = true; H.step = -1; H.veiled = true; H.msg = ''; document.body.classList.add('rit-open'); loadPics(); render(); return true;
-      case 'hearth-close': stop(); H.open = false; H.arrange = false; H.step = -1; H.veiled = true; H.confirm = null; document.body.classList.remove('rit-open'); render(); return true;
+      case 'hearth-open': H.open = true; H.step = -1; H.veiled = true; H.msg = ''; H.confirmPin = false; document.body.classList.add('rit-open');
+        if (hasPin()) lockNow(); else { H.locked = false; H.pinMode = null; loadPics(); } render(); return true;
+      case 'hearth-key': pinDigit(el.dataset.k); return true;
+      case 'hearth-forgot': H.pinMode = 'forgot'; H.pinMsg = ''; redraw(); return true;
+      case 'hearth-forgot-go': forgot(); return true;
+      case 'hearth-pin-set': H.pinMode = 'set1'; H.pin = ''; H.pinFirst = ''; H.pinMsg = ''; redraw(); return true;
+      case 'hearth-pin-cancel': if (H.locked && hasPin()) { H.pinMode = 'unlock'; H.pinMsg = ''; H.pin = ''; } else { H.pinMode = null; H.pin = ''; if (!H.pics) loadPics(); } redraw(); return true;
+      case 'hearth-pin-off-ask': H.confirmPin = true; redraw(); return true;
+      case 'hearth-pin-off': setPin(null); H.confirmPin = false; H.msg = 'PIN removed.'; redraw(); return true;
+      case 'hearth-close': stop(); H.open = false; H.pinMode = null; H.pin = ''; H.arrange = false; H.step = -1; H.veiled = true; H.confirm = null; document.body.classList.remove('rit-open'); render(); return true;
       case 'hearth-begin': if (audio?.state === 'suspended') audio.resume(); H.veiled = false; startStep(0); return true;
       case 'hearth-step': startStep(Number(el.dataset.i)); return true;
       case 'hearth-next': if (H.step + 1 < STEPS.length) startStep(H.step + 1); else { stop(); H.step = STEPS.length; redraw(); } return true;
@@ -331,4 +415,5 @@ export function createHearth({ sb, esc, render, getOutcome, setOutcome, dayLabel
   return { entry, overlay, onClick, onChange };
 }
 
+const FLAME_BIG = '<svg class="hearth-lock-ic" viewBox="0 0 24 24" width="44" height="44" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21c-3.9 0-6.5-2.7-6.5-6.2 0-3.4 2.4-5.4 3.6-8.3.4 2 1.4 3.2 2.6 3.9C11.5 7 13 4.6 15.2 3c-.2 3 1.2 4.7 2.4 6.5 1 1.5 1.4 3 1.4 4.7 0 3.6-2.8 6.8-7 6.8Z"/><path d="M12 21c-1.7 0-3-1.3-3-3 0-1.9 1.6-2.7 2.2-4.4.9 1 2.2 1.6 2.7 3 .2.5.3 1 .3 1.4 0 1.7-1.2 3-2.2 3Z"/></svg>';
 const FLAME = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21c-3.9 0-6.5-2.7-6.5-6.2 0-3.4 2.4-5.4 3.6-8.3.4 2 1.4 3.2 2.6 3.9C11.5 7 13 4.6 15.2 3c-.2 3 1.2 4.7 2.4 6.5 1 1.5 1.4 3 1.4 4.7 0 3.6-2.8 6.8-7 6.8Z"/><path d="M12 21c-1.7 0-3-1.3-3-3 0-1.9 1.6-2.7 2.2-4.4.9 1 2.2 1.6 2.7 3 .2.5.3 1 .3 1.4 0 1.7-1.2 3-2.2 3Z"/></svg>';

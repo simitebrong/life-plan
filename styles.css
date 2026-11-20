@@ -1122,3 +1122,22 @@ button.rit-upload { border: 0; font: inherit; font-weight: 700; }
 .pg-countries div { padding: 10px 12px; border-radius: 10px; border: 1px solid #2e230a; background: rgba(212,175,55,.04); display: grid; gap: 3px; }
 .pg-countries b { font-family: 'Cormorant Garamond', Georgia, serif; font-size: 18px; color: #FFE7A0; }
 .pg-countries span { font-size: 12px; color: #CDB98A; line-height: 1.5; }
+/* Hearth PIN lock */
+.hearth-lock { display: flex; flex-direction: column; align-items: center; text-align: center; padding: 6vh 0 24px; }
+.hearth-lock-ic { color: #E8956E; filter: drop-shadow(0 0 14px rgb(232 149 110 / 0.6)); margin-bottom: 6px; }
+.hearth-lock h2 { font-family: 'Cormorant Garamond', Georgia, serif; font-weight: 500; font-size: 30px; color: #FBEDE3; margin: 2px 0 18px; }
+.hearth-lock-sub { color: #D9B6A4; font-size: 14px; max-width: 30ch; line-height: 1.5; margin: -6px 0 16px; }
+.hearth-dots { display: flex; gap: 18px; margin-bottom: 10px; }
+.hearth-dots i { width: 15px; height: 15px; border-radius: 50%; border: 1.5px solid #E8956E; transition: background .15s, box-shadow .15s; }
+.hearth-dots i.on { background: #E8956E; box-shadow: 0 0 12px rgb(232 149 110 / 0.75); }
+.hearth-dots.shake { animation: hearth-shake .4s; }
+@keyframes hearth-shake { 20%, 60% { transform: translateX(-10px); } 40%, 80% { transform: translateX(10px); } }
+.hearth-lock-msg { min-height: 20px; color: #D9B6A4; font-size: 14px; margin: 0 0 14px; }
+.hearth-keys { display: grid; grid-template-columns: repeat(3, 76px); gap: 14px 22px; margin-bottom: 22px; }
+.hearth-keys button { width: 76px; height: 76px; border-radius: 50%; border: 1px solid rgb(242 165 126 / 0.35); background: rgb(232 149 110 / 0.08); color: #FBEDE3;
+  font-family: "Cormorant Garamond", Georgia, serif; font-size: 32px; font-variant-numeric: lining-nums; font-feature-settings: "lnum"; cursor: pointer; -webkit-tap-highlight-color: transparent; transition: background .12s, transform .08s; }
+.hearth-keys button:active { background: rgb(232 149 110 / 0.3); transform: scale(.95); }
+.hearth-keys button[data-k="del"] { font-family: inherit; font-size: 22px; border-color: transparent; background: transparent; }
+.hearth-keys.wait { opacity: .35; }
+.hearth-pw { width: min(100%, 300px); padding: 12px 14px; border-radius: 12px; border: 1px solid rgb(242 165 126 / 0.45); background: rgb(0 0 0 / 0.3); color: #FBEDE3; font: inherit; font-size: 16px; margin-bottom: 14px; }
+@media (max-height: 640px) { .hearth-keys { grid-template-columns: repeat(3, 64px); } .hearth-keys button { width: 64px; height: 64px; font-size: 26px; } .hearth-lock { padding-top: 2vh; } }
