@@ -4,6 +4,8 @@
 // Personal words live in your private synced settings (settings.gardens), never in this public code;
 // the picture lives in your private storage folder ({uid}/gardens/hero.webp).
 
+import { createGoblin } from './goblin.js';
+
 const CACHE = 'lp-gardens';
 const HERO = 'gardens/hero.webp';
 const DEFAULTS = {
@@ -31,6 +33,8 @@ const pick = (a) => a[Math.floor(Math.random() * a.length)];
 export function createGardens({ sb, esc, render, getContent, setContent, getState, pacingHTML, pour }) {
   const G = { open: false, mode: 'home', step: 0, left: 0, running: false, nudge: null, reason: null, all: false, editing: false, img: undefined, msg: '', reply: null, picking: false };
   let timer = null; let last = 0; let uid = null;
+  const goblin = createGoblin({ esc, redraw: () => redraw(), getContent, setContent,
+    onDone: () => { G.mode = 'home'; redraw(); document.querySelector('.gd')?.scrollTo(0, 0); } });
 
   const content = () => { const c = getContent() || {}; return { reasons: c.reasons?.length ? c.reasons : DEFAULTS.reasons, nudges: c.nudges?.length ? c.nudges : DEFAULTS.nudges }; };
   const fill = (t) => t.replace('{saved}', getState().savedText);
@@ -129,7 +133,7 @@ export function createGardens({ sb, esc, render, getContent, setContent, getStat
       <div class="gd-wins">${w.map(([n, l]) => `<div><b>${esc(String(n))}</b><span>${esc(l)}</span></div>`).join('')}</div></section>`;
   }
   function editor() {
-    const c = content();
+    const c = content(); const gb = getContent()?.goblin || {};
     return `<p class="gd-kick">Your reasons</p><h2 class="gd-h">In your own words</h2>
       <p class="gd-hint">These are private to your account. Write them the way you’d say them to yourself. Use {saved} to show your money saved.</p>
       <div class="gd-edit">${c.reasons.map((r, i) => `<div class="gd-edit-r" data-i="${i}">
@@ -139,6 +143,13 @@ export function createGardens({ sb, esc, render, getContent, setContent, getStat
       <button type="button" class="gd-btn ghost" data-act="gd-add">Add a reason</button>
       <h3 class="gd-sub">Short nudges</h3><p class="gd-hint">One per line. They rotate on the Drinks card and at the top here.</p>
       <textarea class="gd-nudges" data-gd="nudges" rows="8" aria-label="Nudges">${esc(c.nudges.join('\n'))}</textarea>
+      <h3 class="gd-sub">The Goblin</h3>
+      <p class="gd-hint">His name, your own put-downs, and his lies with the truth that answers them.</p>
+      <input type="text" class="gd-nudges" data-gd="gname" value="${esc(gb.name || '')}" placeholder="His name (leave blank for ‘the Goblin’)" aria-label="Goblin's name">
+      <p class="gd-hint" style="margin-top:12px">Your put-downs, one per line. They’ll pop up as you knock him about.</p>
+      <textarea class="gd-nudges" data-gd="putdowns" rows="5" aria-label="Put-downs">${esc((gb.putdowns || []).join('\n'))}</textarea>
+      <p class="gd-hint" style="margin-top:12px">His lies and the truth, one per line, as <b>what he says | the truth</b>.</p>
+      <textarea class="gd-nudges" data-gd="glines" rows="5" aria-label="Goblin lines">${esc((gb.lines || []).map((l) => `${l.says} | ${l.truth}`).join('\n'))}</textarea>
       <div class="gd-row"><button type="button" class="gd-btn" data-act="gd-save">Save</button><button type="button" class="gd-btn ghost" data-act="gd-cancel">Cancel</button></div>`;
   }
   function readEditor() {
@@ -146,7 +157,11 @@ export function createGardens({ sb, esc, render, getContent, setContent, getStat
       id: content().reasons[i]?.id || `r${Date.now()}${i}`,
       title: el.querySelector('[data-gd=title]').value.trim(), text: el.querySelector('[data-gd=text]').value.trim() })).filter((r) => r.title || r.text);
     const nudges = (document.querySelector('[data-gd=nudges]')?.value || '').split('\n').map((x) => x.trim()).filter(Boolean);
-    return { reasons, nudges };
+    const val = (k) => document.querySelector(`[data-gd=${k}]`)?.value || '';
+    const lines = (k) => val(k).split('\n').map((x) => x.trim()).filter(Boolean);
+    const goblin = { ...(getContent()?.goblin || {}), name: val('gname').trim(), putdowns: lines('putdowns'),
+      lines: lines('glines').map((l) => { const [says, ...t] = l.split('|'); return { says: says.trim(), truth: t.join('|').trim() }; }).filter((l) => l.says && l.truth) };
+    return { ...(getContent() || {}), reasons, nudges, goblin };
   }
   function hero() {
     if (G.img === null || G.img === undefined) return `<div class="gd-hero empty"><span class="gd-spin"></span></div>`;
@@ -174,6 +189,7 @@ export function createGardens({ sb, esc, render, getContent, setContent, getStat
     let body;
     if (G.editing) body = editor();
     else if (G.mode === 'pause') body = pauseView();
+    else if (G.mode === 'goblin') body = goblin.view();
     else {
       if (!c.reasons.includes(G.reason)) G.reason = pick(c.reasons);
       const shown = G.all ? c.reasons : [G.reason];
@@ -181,6 +197,8 @@ export function createGardens({ sb, esc, render, getContent, setContent, getStat
         <p class="gd-nudge">${esc(n)}</p>
         <div class="gd-row center"><button type="button" class="gd-link" data-act="gd-nudge">Another thought</button></div>
         <button type="button" class="gd-btn wide" data-act="gd-pause">Take a three-minute pause</button>
+        <button type="button" class="gb-entry" data-act="gd-goblin"><span class="gb-entry-ic" aria-hidden="true">${GOB_ICON}</span>
+          <span class="gb-entry-t">Destroy the Goblin<small>Shrink him, mock him, send him packing. He’s wrong about you.</small></span><span aria-hidden="true">›</span></button>
         ${tonight()}
         <section class="gd-panel"><h2>Why you’re doing this</h2>
           <div class="gd-reasons">${shown.map((r) => reasonCard(r, !G.all)).join('')}</div>
@@ -201,11 +219,12 @@ export function createGardens({ sb, esc, render, getContent, setContent, getStat
     switch (act) {
       case 'gd-open': G.open = true; G.mode = 'home'; G.nudge = null; G.reason = null; G.all = false; G.editing = false; G.reply = null; G.msg = '';
         document.body.classList.add('rit-open'); loadImg(); render(); document.querySelector('.gd')?.scrollTo(0, 0); return true;
-      case 'gd-close': clearInterval(timer); G.open = false; G.cardNudge = null; document.body.classList.remove('rit-open'); render(); return true;
+      case 'gd-close': clearInterval(timer); goblin.reset(); G.open = false; G.cardNudge = null; document.body.classList.remove('rit-open'); render(); return true;
       case 'gd-nudge': { const a = content().nudges; let x = pick(a); if (a.length > 1) while (x === G.nudge) x = pick(a); G.nudge = x; redraw(); return true; }
       case 'gd-reason': { const a = content().reasons; let x = pick(a); if (a.length > 1) while (x === G.reason) x = pick(a); G.reason = x; redraw(); return true; }
       case 'gd-all': G.all = !G.all; redraw(); return true;
       case 'gd-pause': G.reply = null; startStep(0); return true;
+      case 'gd-goblin': clearInterval(timer); G.mode = 'goblin'; goblin.reset(); redraw(); document.querySelector('.gd')?.scrollTo(0, 0); return true;
       case 'gd-next': startStep(Math.min(STEPS.length - 1, G.step + 1)); return true;
       case 'gd-prev': startStep(Math.max(0, G.step - 1)); return true;
       case 'gd-pp': G.running = !G.running; last = Date.now(); redraw(); return true;
@@ -219,10 +238,11 @@ export function createGardens({ sb, esc, render, getContent, setContent, getStat
       case 'gd-add': { const cur = readEditor(); cur.reasons.push({ id: `r${Date.now()}`, title: '', text: '' }); setContent(cur, false); redraw(); return true; }
       case 'gd-del': { const cur = readEditor(); cur.reasons.splice(Number(el.dataset.i), 1); setContent(cur, false); redraw(); return true; }
       case 'gd-save': setContent(readEditor(), true); G.editing = false; G.nudge = null; G.reason = null; G.cardNudge = null; redraw(); return true;
-      default: return false;
+      default: return act.startsWith('gb-') ? goblin.onClick(act, el) : false;
     }
   }
   return { entry, overlay, onClick, isOpen: () => G.open };
 }
 
 const SWAN = '<svg viewBox="0 0 32 24" width="26" height="20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10 6.5c0-2 1.4-3.5 3.2-3.5 1.5 0 2.6.9 3 2.2"/><path d="M16.2 5.2 18 6l-1.8.5"/><path d="M13.2 3c-1.6 2.6-1.8 5.6-.4 8.4 1 2 .4 3.6-1.4 4.6"/><path d="M5 14.5c2.5 3.6 7 5 12 5 5.6 0 9.6-2.4 11-6.5-3.6 1.2-7.4 1-10.6-.6"/><path d="M3 21.5c2-.8 4-.8 6 0s4 .8 6 0 4-.8 6 0 4 .8 6 0"/></svg>';
+const GOB_ICON = '<svg viewBox="0 0 40 32" width="30" height="24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M11 12 2 6l5 11M29 12l9-6-5 11"/><ellipse cx="20" cy="16" rx="11" ry="10"/><path d="M14 13l4 2M26 13l-4 2"/><path d="M16 22q4-3 8 0"/></svg>';
