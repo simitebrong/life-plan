@@ -1141,3 +1141,65 @@ button.rit-upload { border: 0; font: inherit; font-weight: 700; }
 .hearth-keys.wait { opacity: .35; }
 .hearth-pw { width: min(100%, 300px); padding: 12px 14px; border-radius: 12px; border: 1px solid rgb(242 165 126 / 0.45); background: rgb(0 0 0 / 0.3); color: #FBEDE3; font: inherit; font-size: 16px; margin-bottom: 14px; }
 @media (max-height: 640px) { .hearth-keys { grid-template-columns: repeat(3, 64px); } .hearth-keys button { width: 64px; height: 64px; font-size: 26px; } .hearth-lock { padding-top: 2vh; } }
+
+/* ---------- Stay in the gardens (Drinks) — ink on paper, willow green ---------- */
+.gd-entry { display: flex; align-items: center; gap: 12px; width: 100%; margin: 2px 0 14px; padding: 14px 16px; border-radius: 14px; cursor: pointer; text-align: left;
+  border: 1px solid #c9c3b2; background: #F7F4EC; color: #1f2420; box-shadow: 0 1px 0 rgba(0,0,0,.03); font: inherit; }
+.gd-entry-ic { display: grid; place-items: center; width: 42px; height: 42px; border-radius: 50%; background: #E6EBE3; color: #3E5B4A; flex: none; }
+.gd-entry-t { flex: 1; display: flex; flex-direction: column; font-family: 'Cormorant Garamond', Georgia, serif; font-size: 22px; font-weight: 600; line-height: 1.15; }
+.gd-entry-t small { font-family: var(--body); font-size: 13px; font-weight: 400; color: #55604f; margin-top: 3px; line-height: 1.35; }
+.gd-entry-go { font-size: 24px; color: #7d8a77; }
+
+.gd { position: fixed; inset: 0; z-index: 60; overflow-y: auto; overscroll-behavior: contain; background: #F7F4EC; color: #1f2420; -webkit-font-smoothing: antialiased; }
+.gd-inner { max-width: 620px; margin: 0 auto; padding: 56px 16px 60px; }
+.gd-x { position: fixed; top: 10px; right: 12px; z-index: 3; width: 40px; height: 40px; border-radius: 50%; border: 1px solid #c9c3b2; background: rgba(247,244,236,.92); color: #1f2420; font-size: 24px; cursor: pointer; }
+.gd-hero { margin: 0 -4px; }
+.gd-hero img { display: block; width: 100%; height: auto; mix-blend-mode: multiply; filter: brightness(1.05) contrast(1.08); }
+.gd-hero.empty { display: grid; place-items: center; gap: 12px; min-height: 260px; text-align: center; color: #55604f; border: 1px dashed #c9c3b2; border-radius: 16px; padding: 20px; }
+.gd-spin { width: 26px; height: 26px; border-radius: 50%; border: 2px solid #d8d3c4; border-top-color: #3E5B4A; animation: pg-spin 1s linear infinite; }
+.gd-nudge { font-family: 'Cormorant Garamond', Georgia, serif; font-style: italic; font-size: 28px; line-height: 1.25; text-align: center; margin: 6px 8px 2px; color: #1f2420; }
+.gd-row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-top: 12px; }
+.gd-row.center { justify-content: center; }
+.gd-btn { padding: 12px 18px; border-radius: 999px; border: 0; background: #3E5B4A; color: #F7F4EC; font: inherit; font-weight: 700; font-size: 15px; cursor: pointer; }
+.gd-btn.ghost { background: transparent; color: #2f4538; border: 1px solid #9fb0a2; }
+.gd-btn.wide { display: block; width: 100%; margin: 16px 0 4px; padding: 15px; font-size: 16px; }
+.gd-btn:disabled { opacity: .35; }
+.gd-link { border: 0; background: none; color: #3E5B4A; font: inherit; font-weight: 600; font-size: 14px; padding: 6px 2px; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; text-decoration-color: #b6c3b8; }
+.gd-panel { margin: 22px 0; padding: 18px; border-radius: 16px; background: #FFFDF7; border: 1px solid #e3ddcd; }
+.gd-panel h2, .gd-h { font-family: 'Cormorant Garamond', Georgia, serif; font-weight: 600; font-size: 26px; margin: 0 0 8px; color: #1f2420; }
+.gd-kick { font-family: var(--display); font-size: 11px; font-weight: 700; letter-spacing: .2em; text-transform: uppercase; color: #3E5B4A; margin: 0 0 4px; }
+.gd-hint { font-size: 13px; color: #6a7366; margin: 0 0 10px; }
+.gd-hint.center { text-align: center; }
+.gd-lead, .gd-kind { font-size: 15px; line-height: 1.55; color: #2b302a; margin: 0 0 10px; }
+.gd-kind { padding: 12px 14px; border-radius: 12px; background: #EEF2EC; border-left: 3px solid #3E5B4A; }
+.gd-count-line { font-size: 13px; color: #55604f; margin: 0 0 8px; font-variant-numeric: tabular-nums; }
+.gd-tonight .pace { margin: 4px 0; }
+.gd-reasons { display: grid; gap: 10px; }
+.gd-reason { padding: 14px 16px; border-radius: 12px; background: #F3F5F0; border: 1px solid #dfe5dc; }
+.gd-reason h3 { font-family: 'Cormorant Garamond', Georgia, serif; font-size: 22px; font-weight: 600; margin: 0 0 4px; color: #2f4538; }
+.gd-reason p { margin: 0; font-size: 15px; line-height: 1.6; color: #2b302a; }
+.gd-reason.big p { font-family: 'Literata', Georgia, serif; font-size: 17px; line-height: 1.7; }
+.gd-wins { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; }
+.gd-wins div { padding: 12px; border-radius: 12px; background: #F3F5F0; display: grid; gap: 2px; }
+.gd-wins b { font-family: 'Cormorant Garamond', Georgia, serif; font-size: 30px; font-weight: 600; color: #2f4538; line-height: 1; font-variant-numeric: lining-nums; }
+.gd-wins span { font-size: 12px; color: #55604f; line-height: 1.35; }
+.gd-text { font-size: 16px; line-height: 1.6; color: #2b302a; margin: 0 0 14px; }
+.gd-timer { position: relative; width: 120px; height: 120px; margin: 18px auto 4px; }
+.gd-timer svg { width: 100%; height: 100%; }
+.gd-ring-t { fill: none; stroke: #e3ddcd; stroke-width: 4; }
+.gd-ring-p { fill: none; stroke: #3E5B4A; stroke-width: 4; stroke-linecap: round; stroke-dasharray: 276.5; transition: stroke-dashoffset .25s linear; }
+.gd-count { position: absolute; inset: 0; display: grid; place-items: center; font-family: 'Cormorant Garamond', Georgia, serif; font-size: 30px; font-variant-numeric: lining-nums tabular-nums; }
+.gd-breath { display: grid; place-items: center; height: 190px; }
+.gd-orb { width: 170px; height: 170px; border-radius: 50%; background: radial-gradient(circle at 40% 35%, #DCE6DA, #9fb5a3 70%); box-shadow: 0 0 40px rgba(62,91,74,.25); transform: scale(.6); transition: transform .25s linear; }
+.gd-phase { text-align: center; font-family: 'Cormorant Garamond', Georgia, serif; font-style: italic; font-size: 24px; margin: 4px 0 0; }
+.gd-choices { display: grid; gap: 10px; }
+.gd-choice { padding: 15px 16px; border-radius: 14px; border: 1px solid #c9d3c7; background: #FFFDF7; color: #1f2420; font: inherit; font-size: 16px; font-weight: 600; text-align: left; cursor: pointer; }
+.gd-choice.on { background: #3E5B4A; color: #F7F4EC; border-color: #3E5B4A; }
+.gd-reply { margin: 14px 0 0; padding: 14px 16px; border-radius: 12px; background: #EEF2EC; font-family: 'Literata', Georgia, serif; font-size: 16px; line-height: 1.6; animation: pg-rise .35s ease-out; }
+.gd-edit { display: grid; gap: 12px; margin-bottom: 12px; }
+.gd-edit-r { display: grid; gap: 6px; padding: 12px; border-radius: 12px; background: #FFFDF7; border: 1px solid #e3ddcd; }
+.gd-edit input, .gd-edit textarea, .gd-nudges { width: 100%; box-sizing: border-box; padding: 10px 12px; border-radius: 10px; border: 1px solid #cfc8b6; background: #fff; color: #1f2420; font: inherit; font-size: 15px; line-height: 1.5; }
+.gd-edit input { font-weight: 700; }
+.gd-sub { font-family: 'Cormorant Garamond', Georgia, serif; font-size: 22px; margin: 22px 0 4px; }
+@media (prefers-color-scheme: dark) { .gd-entry { background: #EDE9DE; } }
+.gd-tonight .pace-msg { display: none; }

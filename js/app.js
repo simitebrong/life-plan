@@ -11,6 +11,7 @@ import { createProgress } from './progress.js';
 import { createRitual } from './ritual.js';
 import { createHearth } from './hearth.js';
 import { createPlayground } from './playground.js';
+import { createGardens } from './gardens.js';
 
 const sb = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { auth: { persistSession: true, autoRefreshToken: true } });
 const $app = document.getElementById('app');
@@ -264,6 +265,25 @@ function fieldRow(f, d) {
 const drinkGap = () => Number(S.settings.drinkGap) || DEFAULT_GAP;
 const fmtClock = (t) => new Date(t).toTimeString().slice(0, 5);
 const fmtLeft = (ms) => { const s2 = Math.max(0, Math.ceil(ms / 1000)); const m2 = Math.floor(s2 / 60); return `${m2}:${String(s2 % 60).padStart(2, '0')}`; };
+function changeDrinks(n) {
+  const d = entry();
+  const cur = typeof d.drinkCount === 'number' ? d.drinkCount : 0;
+  const next = Math.max(0, cur + n);
+  if (S.day === todayIso()) {
+    const log = Array.isArray(d.drinkPacing) ? [...d.drinkPacing] : [];
+    if (n > 0) {
+      const now = Date.now(); log.push({ t: now, g: drinkGap() });
+      const hm = new Date(now).toTimeString().slice(0, 5);
+      if (!d.firstDrink) d.firstDrink = hm;
+      d.lastDrink = hm;
+    } else {
+      while (log.length > Math.ceil(next)) log.pop();
+    }
+    if (log.length) d.drinkPacing = log; else delete d.drinkPacing;
+  }
+  setValue('drinkCount', next);
+}
+
 function pacingHTML(d) {
   const gap = drinkGap(); const p = pacing(d.drinkPacing); const live = S.day === todayIso();
   const adj = `<div class="gap-adj"><span>Gap</span>
@@ -293,11 +313,13 @@ function pacingHTML(d) {
 }
 // tick the countdown in place each second; re-render once when the gap is reached
 setInterval(() => {
-  const el = document.querySelector('.pace-live[data-until]'); if (!el) return;
-  const left = Number(el.dataset.until) - Date.now();
-  if (left <= 0) { if (navigator.vibrate && document.visibilityState === 'visible') navigator.vibrate([40, 60, 40]); render(); return; }
-  el.querySelector('.pace-left').textContent = fmtLeft(left);
-  const ring = el.querySelector('.pr-p'); if (ring) ring.style.strokeDashoffset = (175.9 * (left / Number(el.dataset.gap))).toFixed(1);
+  const els = document.querySelectorAll('.pace-live[data-until]'); if (!els.length) return;
+  for (const el of els) {
+    const left = Number(el.dataset.until) - Date.now();
+    if (left <= 0) { if (navigator.vibrate && document.visibilityState === 'visible') navigator.vibrate([40, 60, 40]); render(); return; }
+    el.querySelector('.pace-left').textContent = fmtLeft(left);
+    const ring = el.querySelector('.pr-p'); if (ring) ring.style.strokeDashoffset = (175.9 * (left / Number(el.dataset.gap))).toFixed(1);
+  }
 }, 1000);
 
 function cardHTML(card, d, sc) {
@@ -312,7 +334,7 @@ function cardHTML(card, d, sc) {
     body += fieldRow(f, d);
   }
   let extra = '';
-  if (card.id === 'drinks') extra = drinksFooter();
+  if (card.id === 'drinks') { extra = drinksFooter(); body = gardens.entry() + body; }
   if (card.id === 'wellbeing') { const w = wellbeingReading(d); if (w != null) extra = `<p class="micro">Wellbeing reading today: <strong>${w}</strong>. This never affects your score.</p>`; }
   const areaScore = card.area && card.id !== 'night' ? sc.areas[card.area] : null;
   const off = card.offToggle && d.workOff;
@@ -858,6 +880,39 @@ const hearth = createHearth({
   setPin: (v) => { if (v) S.settings.hearthPin = v; else delete S.settings.hearthPin; saveSettings(); },
   dayLabel: () => (S.day === todayIso() ? 'today' : fmtShort(S.day)),
 });
+// "Stay in the gardens": the evening steadying space on the Drinks card
+function gardensState() {
+  const d = entry(); const live = S.day === todayIso();
+  const t = ctxFor(S.day).target; const drinks = typeof d.drinkCount === 'number' ? d.drinkCount : 0;
+  const p = pacing(d.drinkPacing); const gap = drinkGap();
+  const waiting = !!(p.last && p.last.t + gap * 60000 > Date.now());
+  const base = Number(S.settings.baselineSpend) || 12;
+  const spendDays = Object.keys(S.entries).filter((k) => typeof S.entries[k].spend === 'number');
+  const saved = spendDays.reduce((a, k) => a + (base - S.entries[k].spend), 0);
+  const month = todayIso().slice(0, 7);
+  const mDays = Object.keys(S.entries).filter((k) => k.startsWith(month) && k < todayIso()); // finished evenings only
+  const num = (k) => (typeof S.entries[k].drinkCount === 'number' ? S.entries[k].drinkCount : null);
+  const dry = mDays.filter((k) => num(k) === 0).length;
+  const onPlan = mDays.filter((k) => num(k) != null && ctxFor(k).target != null && num(k) <= ctxFor(k).target).length;
+  const pacedM = mDays.reduce((a, k) => a + (pacing(S.entries[k].drinkPacing).paced || 0), 0);
+  const mSaved = mDays.filter((k) => typeof S.entries[k].spend === 'number').reduce((a, k) => a + (base - S.entries[k].spend), 0);
+  const wins = [];
+  if (saved > 0) wins.push([money(saved), 'saved against your old spend']);
+  if (mSaved > 0 && Math.abs(mSaved - saved) > 0.5) wins.push([money(mSaved), 'saved this month']);
+  if (onPlan) wins.push([onPlan, `evening${onPlan === 1 ? '' : 's'} on plan this month`]);
+  if (dry) wins.push([dry, `dry day${dry === 1 ? '' : 's'} this month`]);
+  if (pacedM) wins.push([pacedM, `paced drink${pacedM === 1 ? '' : 's'} this month`]);
+  return { live, drinks, target: t, gap, paced: p.paced || 0, waiting, over: t != null && drinks > t,
+    savedText: saved > 0 ? money(saved) : 'Every pound', wins };
+}
+const gardens = createGardens({
+  sb, esc, render: () => render(),
+  getContent: () => S.settings.gardens || null,
+  setContent: (v, save) => { S.settings.gardens = v; if (save) saveSettings(); },
+  getState: gardensState,
+  pacingHTML: () => pacingHTML(entry()),
+  pour: () => changeDrinks(1),
+});
 const playground = createPlayground({
   sb, esc, render: () => render(),
   openStory: (id, quote) => (quote ? lib.openAt(id, quote) : lib.onClick('l-read', { dataset: { id } })),
@@ -879,6 +934,7 @@ function render() {
   const y = window.scrollY;
   const ritY = document.querySelector('.rit')?.scrollTop;
   const pgY = document.querySelector('.pg')?.scrollTop;
+  const gdY = document.querySelector('.gd')?.scrollTop;
   const views = { today: viewToday, workout: viewWorkout, library: () => lib.view(), progress: viewProgress, goals: viewGoals, settings: viewSettings };
   const immersive = S.view === 'library' && lib.immersive();
   $app.innerHTML = `<main class="view view-${S.view}${immersive ? ' immersive' : ''}">${views[S.view]()}</main>
@@ -886,10 +942,11 @@ function render() {
       <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${COG}</svg></button>
     <nav class="tabbar" aria-label="Sections">${TABS.map(([id, label, icon]) => `<button type="button" class="tab${S.view === id ? ' on' : ''}" data-act="tab" data-v="${id}" aria-current="${S.view === id ? 'page' : 'false'}">
       <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${icon}</svg><span>${label}</span></button>`).join('')}</nav>`}
-    ${S.sheet ? sheetHTML() : ''}${S.celebrate ? celebrateSheet() : ''}${S.guide ? guideSheet() : ''}${ritual.overlay()}${hearth.overlay()}${playground.overlay()}`;
+    ${S.sheet ? sheetHTML() : ''}${S.celebrate ? celebrateSheet() : ''}${S.guide ? guideSheet() : ''}${ritual.overlay()}${hearth.overlay()}${playground.overlay()}${gardens.overlay()}`;
   window.scrollTo(0, y);
   if (ritY != null) { const r = document.querySelector('.rit'); if (r) r.scrollTop = ritY; }
   if (pgY != null) { const r = document.querySelector('.pg'); if (r) r.scrollTop = pgY; }
+  if (gdY != null) { const r = document.querySelector('.gd'); if (r) r.scrollTop = gdY; }
   setSaveState(S.saveState);
   if (immersive) document.body.dataset.rt = store.get('lp-reader', {}).theme || 'auto'; else delete document.body.dataset.rt;
   lib.afterRender();
@@ -919,6 +976,7 @@ $app.addEventListener('click', async (e) => {
   if (await prog.onClick(act, el)) return;
   if (ritual.onClick(act, el)) return;
   if (hearth.onClick(act, el)) return;
+  if (gardens.onClick(act, el)) return;
   const fid = el.dataset.f;
   const d = entry();
   switch (act) {
@@ -943,25 +1001,7 @@ $app.addEventListener('click', async (e) => {
       break;
     }
     case 'clear': setValue(fid, null); break;
-    case 'count': {
-      const n = Number(el.dataset.n);
-      const cur = typeof d.drinkCount === 'number' ? d.drinkCount : 0;
-      const next = Math.max(0, cur + n);
-      if (S.day === todayIso()) {
-        const log = Array.isArray(d.drinkPacing) ? [...d.drinkPacing] : [];
-        if (n > 0) {
-          const now = Date.now(); log.push({ t: now, g: drinkGap() });
-          const hm = new Date(now).toTimeString().slice(0, 5);
-          if (!d.firstDrink) d.firstDrink = hm;
-          d.lastDrink = hm;
-        } else {
-          while (log.length > Math.ceil(next)) log.pop();
-        }
-        if (log.length) d.drinkPacing = log; else delete d.drinkPacing;
-      }
-      setValue('drinkCount', next);
-      break;
-    }
+    case 'count': changeDrinks(Number(el.dataset.n)); break;
     case 'gap': {
       S.settings.drinkGap = Math.max(5, Math.min(180, drinkGap() + Number(el.dataset.n)));
       saveSettings(); render();
