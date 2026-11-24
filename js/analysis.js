@@ -515,6 +515,21 @@ export function nextDrinkStep(day, settings) {
 }
 
 const KEEP_RAW = FIELDS.map((f) => f.id).concat(['ritualMorningStyle', 'ritualNightStyle', 'workOff', 'workoutScore', 'readSecs', 'basilReadSecs', 'done', 'workout']);
+// "Before you pour" check-ins, made readable for the review
+const FELT = ['not at all', 'a little', 'noticeably', 'plenty'];
+function readableCheck(r) {
+  const hm = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/London', hour: '2-digit', minute: '2-digit' }).format(new Date(r.t));
+  return { time: hm, drinkNumber: r.n, poured: !!r.poured, reasons: r.why || [], alreadyFeltIt: r.fx == null ? null : FELT[r.fx], thoughtItWouldAdd: r.adds || null };
+}
+export function drinkCheckinSummary(days, entries) {
+  const recs = days.flatMap((d) => (Array.isArray(entries[d]?.drinkWhy) ? entries[d].drinkWhy : []));
+  if (!recs.length) return null;
+  const pours = recs.filter((r) => r.poured); const reasons = {};
+  recs.forEach((r) => (r.why || []).forEach((k) => { reasons[k] ||= { poured: 0, choseNotTo: 0 }; reasons[k][r.poured ? 'poured' : 'choseNotTo']++; }));
+  return { checkins: recs.length, poured: pours.length, choseNotTo: recs.length - pours.length, reasons,
+    pouredWhenAlreadyFeelingItNoticeablyOrMore: pours.filter((r) => r.fx != null && r.fx >= 2).length,
+    pouredThinkingItWouldNotAdd: pours.filter((r) => r.adds === 'no').length };
+}
 export function weeklySummary(entries, settings, wkStart, extra = {}) {
   const ctx = makeCtx(settings);
   const days = daysBetween(wkStart, addDays(wkStart, 6));
@@ -545,6 +560,7 @@ export function weeklySummary(entries, settings, wkStart, extra = {}) {
       raw.drinkPacing = e.drinkPacing.map((x, i) => ({ time: hm(x.t), gapTarget: x.g,
         minsSincePrevious: i ? Math.round((x.t - e.drinkPacing[i - 1].t) / 60000) : null, paced: i ? (x.t - e.drinkPacing[i - 1].t) / 60000 >= x.g - 0.01 : null }));
     }
+    if (Array.isArray(e.drinkWhy)) raw.drinkCheckins = e.drinkWhy.map(readableCheck);
     return { day: d, weekday: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][weekday(d)], logged: true, inProgress: partial || undefined, score: partial ? null : sc.overall, areas: partial ? null : sc.areas,
       drinksTarget: ctx(d).target, workoutTarget: ctx(d).workoutTarget, wellbeing: wellbeingReading(e), data: raw };
   });
@@ -555,6 +571,7 @@ export function weeklySummary(entries, settings, wkStart, extra = {}) {
     stats: cur, previousWeek: before.logged ? before : null,
     habits, highlights, daily,
     notes: days.filter((d) => entries[d]?.notes).map((d) => ({ day: d, text: String(entries[d].notes).trim() })),
+    drinkCheckins: drinkCheckinSummary(days, entries), drinkCheckinsPreviousWeek: drinkCheckinSummary(prev, entries),
     currentDrinksTarget: ctx(end).target,
     nextDrinkStep: nextDrinkStep(end, settings),
     workoutTargetNextWeek: workoutTarget(addDays(end, 1), settings?.workoutPlan),

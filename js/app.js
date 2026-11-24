@@ -912,6 +912,8 @@ const gardens = createGardens({
   getState: gardensState,
   pacingHTML: () => pacingHTML(entry()),
   pour: () => changeDrinks(1),
+  getEntries: () => S.entries, todayIso,
+  logCheck: (rec) => { const d = entry(); d.drinkWhy = [...(Array.isArray(d.drinkWhy) ? d.drinkWhy : []), rec]; queueSave(S.day); },
 });
 const playground = createPlayground({
   sb, esc, render: () => render(),

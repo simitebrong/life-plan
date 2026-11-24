@@ -5,6 +5,7 @@
 // the picture lives in your private storage folder ({uid}/gardens/hero.webp).
 
 import { createGoblin } from './goblin.js';
+import { createDrinkWhy } from './drinkwhy.js';
 
 const CACHE = 'lp-gardens';
 const HERO = 'gardens/hero.webp';
@@ -30,11 +31,14 @@ const CHOICES = [
 ];
 const pick = (a) => a[Math.floor(Math.random() * a.length)];
 
-export function createGardens({ sb, esc, render, getContent, setContent, getState, pacingHTML, pour }) {
+export function createGardens({ sb, esc, render, getContent, setContent, getState, pacingHTML, pour, getEntries, todayIso, logCheck }) {
   const G = { open: false, mode: 'home', step: 0, left: 0, running: false, nudge: null, reason: null, all: false, editing: false, img: undefined, msg: '', reply: null, picking: false };
   let timer = null; let last = 0; let uid = null;
   const goblin = createGoblin({ esc, redraw: () => redraw(), getContent, setContent,
     onDone: () => { G.mode = 'home'; redraw(); document.querySelector('.gd')?.scrollTo(0, 0); } });
+  const dw = createDrinkWhy({ esc, redraw: () => redraw(), getEntries, todayIso, drinksSoFar: () => getState().drinks, logCheck, pour,
+    onDone: (msg) => { G.mode = 'home'; G.flash = msg; redraw(); if (msg) requestAnimationFrame(() => document.querySelector('.gd-tonight')?.scrollIntoView({ block: 'start' })); else document.querySelector('.gd')?.scrollTo(0, 0); },
+    openGoblin: () => { G.mode = 'goblin'; goblin.reset(); redraw(); document.querySelector('.gd')?.scrollTo(0, 0); } });
 
   const content = () => { const c = getContent() || {}; return { reasons: c.reasons?.length ? c.reasons : DEFAULTS.reasons, nudges: c.nudges?.length ? c.nudges : DEFAULTS.nudges }; };
   const fill = (t) => t.replace('{saved}', getState().savedText);
@@ -121,7 +125,8 @@ export function createGardens({ sb, esc, render, getContent, setContent, getStat
     return `<section class="gd-panel gd-tonight"><h2>Tonight</h2>${lead}
       <p class="gd-count-line">${s.drinks ? `${s.drinks} of ${s.target ?? '–'} so far${s.paced ? ` · ${s.paced} paced` : ''}` : 'Nothing poured yet'}</p>
       ${pacingHTML()}
-      <div class="gd-row"><button type="button" class="gd-btn" data-act="count" data-n="1">Pouring one</button>
+      ${G.flash ? `<p class="dw-flash" role="status">${esc(G.flash)}</p>` : ''}
+      <div class="gd-row"><button type="button" class="gd-btn" data-act="gd-check">Pouring one</button>
 </div></section>`;
   }
   function reasonCard(r, big = false) {
@@ -190,6 +195,8 @@ export function createGardens({ sb, esc, render, getContent, setContent, getStat
     if (G.editing) body = editor();
     else if (G.mode === 'pause') body = pauseView();
     else if (G.mode === 'goblin') body = goblin.view();
+    else if (G.mode === 'check') body = dw.checkView();
+    else if (G.mode === 'why') body = dw.insightsView();
     else {
       if (!c.reasons.includes(G.reason)) G.reason = pick(c.reasons);
       const shown = G.all ? c.reasons : [G.reason];
@@ -206,6 +213,7 @@ export function createGardens({ sb, esc, render, getContent, setContent, getStat
             : `<button type="button" class="gd-link" data-act="gd-reason">Another reason</button><button type="button" class="gd-link" data-act="gd-all">See all ${c.reasons.length}</button>`}
             <button type="button" class="gd-link" data-act="gd-edit">Edit</button></div></section>
         ${wins()}
+        <button type="button" class="gd-btn ghost wide" data-act="gd-why">What’s behind the drinks</button>
         <div class="gd-row center"><button type="button" class="gd-link" data-act="gd-pic">Change picture</button></div>
         ${G.msg ? `<p class="gd-hint center">${esc(G.msg)}</p>` : ''}`;
     }
@@ -217,20 +225,22 @@ export function createGardens({ sb, esc, render, getContent, setContent, getStat
   // ---------- events ----------
   function onClick(act, el) {
     switch (act) {
-      case 'gd-open': G.open = true; G.mode = 'home'; G.nudge = null; G.reason = null; G.all = false; G.editing = false; G.reply = null; G.msg = '';
+      case 'gd-open': G.open = true; G.mode = 'home'; G.flash = ''; G.nudge = null; G.reason = null; G.all = false; G.editing = false; G.reply = null; G.msg = '';
         document.body.classList.add('rit-open'); loadImg(); render(); document.querySelector('.gd')?.scrollTo(0, 0); return true;
       case 'gd-close': clearInterval(timer); goblin.reset(); G.open = false; G.cardNudge = null; document.body.classList.remove('rit-open'); render(); return true;
       case 'gd-nudge': { const a = content().nudges; let x = pick(a); if (a.length > 1) while (x === G.nudge) x = pick(a); G.nudge = x; redraw(); return true; }
       case 'gd-reason': { const a = content().reasons; let x = pick(a); if (a.length > 1) while (x === G.reason) x = pick(a); G.reason = x; redraw(); return true; }
       case 'gd-all': G.all = !G.all; redraw(); return true;
       case 'gd-pause': G.reply = null; startStep(0); return true;
+      case 'gd-check': clearInterval(timer); G.flash = ''; dw.begin(); G.mode = 'check'; redraw(); document.querySelector('.gd')?.scrollTo(0, 0); return true;
+      case 'gd-why': G.mode = 'why'; redraw(); document.querySelector('.gd')?.scrollTo(0, 0); return true;
       case 'gd-goblin': clearInterval(timer); G.mode = 'goblin'; goblin.reset(); redraw(); document.querySelector('.gd')?.scrollTo(0, 0); return true;
       case 'gd-next': startStep(Math.min(STEPS.length - 1, G.step + 1)); return true;
       case 'gd-prev': startStep(Math.max(0, G.step - 1)); return true;
       case 'gd-pp': G.running = !G.running; last = Date.now(); redraw(); return true;
       case 'gd-home': clearInterval(timer); G.mode = 'home'; G.reply = null; redraw(); document.querySelector('.gd')?.scrollTo(0, 0); return true;
       case 'gd-choose': G.reply = el.dataset.v; if (navigator.vibrate) navigator.vibrate(12);
-        if (el.dataset.v === 'slow') pour(); // logs the drink, which starts the gap clock
+        if (el.dataset.v === 'slow') return onClick('gd-check'); // the honest check-in, then the clock
         redraw(); return true;
       case 'gd-pic': choosePicture(); return true;
       case 'gd-edit': G.editing = true; redraw(); document.querySelector('.gd')?.scrollTo(0, 0); return true;
@@ -238,7 +248,7 @@ export function createGardens({ sb, esc, render, getContent, setContent, getStat
       case 'gd-add': { const cur = readEditor(); cur.reasons.push({ id: `r${Date.now()}`, title: '', text: '' }); setContent(cur, false); redraw(); return true; }
       case 'gd-del': { const cur = readEditor(); cur.reasons.splice(Number(el.dataset.i), 1); setContent(cur, false); redraw(); return true; }
       case 'gd-save': setContent(readEditor(), true); G.editing = false; G.nudge = null; G.reason = null; G.cardNudge = null; redraw(); return true;
-      default: return act.startsWith('gb-') ? goblin.onClick(act, el) : false;
+      default: return act.startsWith('gb-') ? goblin.onClick(act, el) : act.startsWith('dw-') ? dw.onClick(act, el) : false;
     }
   }
   return { entry, overlay, onClick, isOpen: () => G.open };

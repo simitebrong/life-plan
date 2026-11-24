@@ -1262,3 +1262,33 @@ button.rit-upload { border: 0; font: inherit; font-weight: 700; }
 .gb-truthbtn.on { background: #3E5B4A; color: #F7F4EC; border-color: #3E5B4A; }
 .gb-final { font-family: 'Literata', Georgia, serif; font-size: 16px; color: #2f4538; margin: 12px 0 0; }
 @media (prefers-reduced-motion: reduce) { .gb-stage *, .gb-body { animation: none !important; } }
+
+/* ---------- Before you pour (check-in) + insights ---------- */
+.dw-q { margin: 0 0 16px; }
+.dw-q h3 { font-family: 'Cormorant Garamond', Georgia, serif; font-size: 21px; font-weight: 600; margin: 0 0 8px; color: #1f2420; }
+.dw-q h3 small { font-family: var(--body); font-size: 12px; font-weight: 400; color: #6a7366; margin-left: 4px; }
+.dw-opts { display: grid; grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); gap: 8px; }
+.dw-opts button, .dw-chips button, .dw-range button { padding: 11px 10px; border-radius: 12px; border: 1px solid #c9d3c7; background: #FFFDF7; color: #1f2420; font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; }
+.dw-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.dw-chips button { border-radius: 999px; padding: 9px 14px; }
+.dw-opts button.on, .dw-chips button.on, .dw-range button.on { background: #3E5B4A; color: #F7F4EC; border-color: #3E5B4A; }
+.dw-reflect { margin: 4px 0 16px; padding: 14px 16px; border-radius: 12px; background: #EEF2EC; border-left: 3px solid #3E5B4A; font-family: 'Literata', Georgia, serif; font-size: 16px; line-height: 1.6; animation: pg-rise .35s ease-out; }
+.dw-go { display: grid; gap: 10px; margin-top: 6px; }
+.dw-go .gd-btn { width: 100%; padding: 15px; font-size: 16px; }
+.dw-flash { margin: 0 0 12px; padding: 12px 14px; border-radius: 12px; background: #EEF2EC; font-size: 15px; line-height: 1.5; color: #2f4538; font-weight: 600; animation: pg-rise .35s ease-out; }
+.dw-range { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin: 6px 0 14px; }
+.dw-range button { padding: 8px 4px; font-size: 13px; }
+.dw-ins { font-size: 15px; line-height: 1.6; margin: 0 0 10px; padding-left: 14px; border-left: 2px solid #b6c3b8; }
+.dw-ins:last-child { margin-bottom: 0; }
+.dw-bars { display: grid; gap: 8px; }
+.dw-bar { display: grid; grid-template-columns: 92px 1fr 28px; gap: 8px; align-items: center; font-size: 13px; }
+.dw-bl { color: #2b302a; }
+.dw-bt { display: flex; height: 12px; border-radius: 6px; background: #eef0ea; overflow: hidden; }
+.dw-bt i { display: block; height: 100%; }
+.dw-bt i.p { background: #3E5B4A; }
+.dw-bt i.h { background: #a9c3ad; }
+.dw-bn { text-align: right; font-variant-numeric: tabular-nums; color: #55604f; }
+.dw-log { display: grid; gap: 8px; }
+.dw-log > div { display: grid; gap: 2px; padding: 10px 12px; border-radius: 10px; background: #F3F5F0; font-size: 14px; line-height: 1.45; }
+.dw-log > div.held { background: #e7efe3; border-left: 3px solid #6f9c74; }
+.dw-lt { font-size: 12px; color: #6a7366; }
