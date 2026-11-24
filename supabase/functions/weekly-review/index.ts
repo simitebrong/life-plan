@@ -4,8 +4,8 @@ import webpush from "npm:web-push@3.6.7";
 // The same analysis code the app's Progress screen runs, pinned to a commit of this repo and
 // bundled at deploy time, so the review's numbers match the charts. After changing js/analysis.js
 // or js/fields.js: push, update the commit below, redeploy.
-import { weeklySummary, weekStart, addDays } from "https://esm.sh/gh/simitebrong/life-plan@69d40914a55be3c15bab1c96eadc693a30b0b9cc/js/analysis.js";
-import { FIELDS } from "https://esm.sh/gh/simitebrong/life-plan@69d40914a55be3c15bab1c96eadc693a30b0b9cc/js/fields.js";
+import { weeklySummary, weekStart, addDays } from "https://esm.sh/gh/simitebrong/life-plan@8d3c0eca03992683906997fe1a3d896bc43ef5cf/js/analysis.js";
+import { FIELDS } from "https://esm.sh/gh/simitebrong/life-plan@8d3c0eca03992683906997fe1a3d896bc43ef5cf/js/fields.js";
 
 // Life Plan weekly review.
 // Cron mode (x-cron-secret): every 15 min on Sundays; writes the review at the user's chosen time and sends a push.
@@ -44,6 +44,7 @@ readSecs / basilReadSecs: seconds spent reading in the app's library (Basil = hi
 done: he tapped "Finish my day"
 ritualMorning / ritualNight: "yes" = he completed that grounding ritual (breath, stretches, kneeling stillness before his wife's picture); each adds 75 points. ritualMorningStyle / ritualNightStyle say which version he chose: rise/settle = standard, offering/vigil = openly devotional, steady/soft = the gentler reconnecting one used after friction between them, kindle/velvet = warmth and desire. Celebrate them; never treat a missed one as a failure. If he chose a reconnecting one, acknowledge the effort to repair kindly and without prying.
 drinkPacing: each drink he logged that day with its clock time, the minimum gap he'd set (gapTarget, minutes; he raises it in 5-minute steps over time), minutes since the previous drink, and paced=true when he waited the full gap (+10 points each). Slower pacing is the goal: celebrate paced drinks and longer average gaps.
+drinkCheckins (per day) and drinkCheckins / drinkCheckinsPreviousWeek (weekly totals): his honest "before you pour" check-ins. For each one: time, which drink it would have been, the reasons behind it (fun, social, relaxation, excitement, craving, habit, compulsion, stress, anger, loneliness, insecurity, fear, sleep), how much he already felt the drinks (not at all / a little / noticeably / plenty), whether he thought it would genuinely add anything, and poured=false when he checked in and chose not to pour. Choosing not to pour is a clear win: always celebrate it. Treat the reasons as insight, never judgement: notice which feelings tend to lead to drinks (and which later drinks run on habit or compulsion rather than enjoyment), gently name a kinder alternative for hard feelings like stress or loneliness, and note when drinks are for good reasons like fun or company.
 retraction / regularity: personal symptom readings 0-5 (regularity = bowel movements), recorded for insight only; mention matter-of-factly if a link stands out, never diagnose.
 dmApp: how much he used his devotion/marriage support app that day.
 kidsTime: quality time with his kids that evening; "notPresent" means the kids weren't around, so it is not a miss.
